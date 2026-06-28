@@ -1177,6 +1177,7 @@ function updateCompletedUI() {
     const card = createElement("div", "completed-goal");
     const head = createElement("div", "completed-goal-head");
     head.innerHTML = `<strong>${escapeHtml(task.name)}</strong><span>${formatFullDate(task.start)} - ${formatFullDate(task.end)}</span>`;
+    const actions = createElement("div", "completed-goal-actions");
     const restore = createElement("button", "ghost-button restore-button", "되돌리기");
     restore.type = "button";
     restore.addEventListener("click", () => {
@@ -1184,7 +1185,16 @@ function updateCompletedUI() {
       saveState();
       render();
     });
-    head.append(restore);
+    const remove = createElement("button", "danger-button completed-delete-button", "삭제");
+    remove.type = "button";
+    remove.addEventListener("click", () => {
+      if (!window.confirm(`'${task.name}' 목표를 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+      state.tasks = state.tasks.filter((item) => item.id !== task.id);
+      saveState();
+      render();
+    });
+    actions.append(restore, remove);
+    head.append(actions);
     card.append(head);
 
     const entries = Object.entries(task.entries)

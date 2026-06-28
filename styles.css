@@ -1151,8 +1151,15 @@ label[hidden],
   font-weight: 700;
 }
 
-.restore-button {
+.completed-goal-actions {
   margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.restore-button,
+.completed-delete-button {
   min-height: 34px;
   padding: 0 12px;
   font-size: 13px;
