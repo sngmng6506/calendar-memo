@@ -765,7 +765,7 @@ function jumpToDate(dateStr) {
   }
   const index = allDates.indexOf(dateStr);
   if (index === -1) {
-    window.alert("해당 날짜에는 표시할 일정이 없습니다.");
+    window.alert(`타임라인에 표시된 기간(${allDates[0]} ~ ${allDates.at(-1)})을 벗어난 날짜입니다.`);
     return;
   }
   const maxStart = Math.max(0, allDates.length - visibleDayCount);
