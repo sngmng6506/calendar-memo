@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>업무 · 일정 관리</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar" aria-label="앱 개요">
+        <div class="brand">
+          <h1>업무 · 일정 관리</h1>
+        </div>
+        <div class="topbar-right">
+          <span id="todayLabel" class="today-label"></span>
+          <div id="authArea" class="auth-area"></div>
+        </div>
+      </section>
+
+      <section class="graph-panel" aria-label="날짜별 전체 진척률 그래프">
+        <div class="panel-heading">
+          <div>
+            <h2>업무량 밸런스</h2>
+            <p id="rangeLabel"></p>
+            <div class="graph-legend" aria-label="그래프 범례">
+              <span><i class="line-dot load"></i>업무량</span>
+              <span id="conditionLegend"><i class="line-dot energy-line"></i>컨디션</span>
+              <span id="milestoneLegend"><i class="line-dot milestone-mark"></i>마일스톤</span>
+            </div>
+          </div>
+          <div class="panel-actions">
+            <div class="date-nav" aria-label="날짜 이동">
+              <button id="prevWindow" type="button" class="ghost-button">‹</button>
+              <span id="dateRangePill" class="range-pill"></span>
+              <button id="nextWindow" type="button" class="ghost-button">›</button>
+            </div>
+            <div class="segmented-control" aria-label="그래프 보기 방식">
+              <button id="totalGraphMode" type="button" class="active">전체 흐름</button>
+              <button id="taskGraphMode" type="button">목표별 흐름</button>
+            </div>
+            <button id="resetDemo" type="button" class="ghost-button">샘플 초기화</button>
+          </div>
+        </div>
+        <canvas id="progressCanvas" width="1500" height="260"></canvas>
+        <div id="graphTooltip" class="graph-tooltip" hidden></div>
+      </section>
+
+      <section class="board-section" aria-label="목표 타임라인">
+        <div class="board-toolbar">
+          <div>
+            <h2>타임라인</h2>
+          </div>
+          <div class="legend" aria-label="범례">
+            <span><i class="dot milestone"></i>마일스톤</span>
+            <span><i class="dot trouble"></i>트러블</span>
+            <span><i class="dot extra"></i>추가 일</span>
+            <span><i class="dot recurring"></i>정기</span>
+            <span><i class="dot energy"></i>컨디션</span>
+          </div>
+        </div>
+        <div class="board-add-panel">
+          <div class="add-forms">
+          <form id="taskForm" class="task-form">
+            <label>
+              <span>목표</span>
+              <input id="taskName" type="text" placeholder="예: 고객사 제안서, 운동 루틴, 창업 준비" required />
+            </label>
+            <div class="date-pair">
+              <label>
+                <span>시작</span>
+                <input id="startDate" type="date" required />
+              </label>
+              <label>
+                <span>종료</span>
+                <input id="endDate" type="date" required />
+              </label>
+            </div>
+            <label class="check-row add-check">
+              <input id="isCompanyProject" type="checkbox" />
+              <span>회사 프로젝트</span>
+            </label>
+            <button type="submit">목표 추가</button>
+          </form>
+          <form id="recurringForm" class="recurring-form">
+            <label>
+              <span>정기 일정</span>
+              <input id="recurringName" type="text" placeholder="예: 매주 토요일 수영" required />
+            </label>
+            <label>
+              <span>반복 요일</span>
+              <div id="recurringWeekdays" class="weekday-picker">
+                <label><input type="checkbox" value="1" />월</label>
+                <label><input type="checkbox" value="2" />화</label>
+                <label><input type="checkbox" value="3" />수</label>
+                <label><input type="checkbox" value="4" />목</label>
+                <label><input type="checkbox" value="5" />금</label>
+                <label><input type="checkbox" value="6" />토</label>
+                <label><input type="checkbox" value="0" />일</label>
+              </div>
+            </label>
+            <label>
+              <span>기간(개월)</span>
+              <input id="recurringMonths" type="number" min="1" step="1" value="12" required />
+            </label>
+            <button type="submit">정기 추가</button>
+          </form>
+          </div>
+          <div class="board-tools" aria-label="타임라인 도구">
+            <div class="tool-stack">
+              <button id="openCompleted" type="button" class="tool-button" hidden>
+                <span>완료한 목표</span>
+                <b id="completedCount">0</b>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="timeline" class="timeline" tabindex="0"></div>
+      </section>
+    </main>
+
+    <dialog id="completedDialog" class="entry-dialog completed-dialog">
+      <div class="dialog-heading">
+        <div>
+          <h3>완료한 목표</h3>
+          <p>완료 처리한 목표의 날짜별 기록을 모아 봅니다.</p>
+        </div>
+        <button type="button" id="closeCompleted" class="icon-button" aria-label="닫기">×</button>
+      </div>
+      <div id="completedDialogBody" class="completed-list"></div>
+    </dialog>
+
+    <dialog id="entryDialog" class="entry-dialog">
+      <form method="dialog" id="entryForm">
+        <div class="dialog-heading">
+          <div>
+            <h3 id="dialogTitle">기록 편집</h3>
+            <p id="dialogMeta"></p>
+          </div>
+          <button value="cancel" type="submit" class="icon-button" aria-label="닫기">×</button>
+        </div>
+
+        <div class="entry-grid">
+          <label class="check-row">
+            <input id="isMilestone" type="checkbox" />
+            <span>마일스톤</span>
+          </label>
+        </div>
+
+        <label>
+          <span>진척률 변화</span>
+          <div id="progressDelta" class="delta-slider"></div>
+          <strong id="deltaValue">0%</strong>
+        </label>
+
+        <label>
+          <span>발생한 트러블</span>
+          <textarea id="troubleText" rows="3" placeholder="막힌 점, 리스크, 지연 원인"></textarea>
+        </label>
+
+        <label>
+          <span>추가 일</span>
+          <textarea id="extraText" rows="3" placeholder="새로 생긴 일, 후속 관리 항목"></textarea>
+        </label>
+
+        <label>
+          <span>메모</span>
+          <textarea id="noteText" rows="3" placeholder="그날의 진행 내용"></textarea>
+        </label>
+
+        <menu class="dialog-actions">
+          <button id="deleteEntry" type="button" class="danger-button">기록 삭제</button>
+          <button id="saveEntry" value="default" type="submit">저장</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="taskDialog" class="entry-dialog">
+      <form method="dialog" id="taskEditForm">
+        <div class="dialog-heading">
+          <div>
+            <h3 id="taskDialogTitle">목표 수정</h3>
+          </div>
+          <button value="cancel" type="submit" class="icon-button" aria-label="닫기">×</button>
+        </div>
+
+        <label id="editTaskNameField">
+          <span>목표</span>
+          <input id="editTaskName" type="text" required />
+        </label>
+
+        <div class="date-edit-grid" id="editTaskDateGrid">
+          <label>
+            <span>시작</span>
+            <input id="editStartDate" type="date" required />
+          </label>
+          <label>
+            <span>종료</span>
+            <input id="editEndDate" type="date" required />
+          </label>
+        </div>
+
+        <div id="editTaskWorkloadGrid" class="workload-editor">
+          <span class="field-label">업무량 설정</span>
+          <label>
+            <span>소요 시간</span>
+            <input id="editTaskHours" type="number" min="0" step="0.5" placeholder="예: 3" />
+          </label>
+          <p id="workloadPreview" class="field-hint">12시간 = 100%, 100% 초과 가능</p>
+        </div>
+        <p id="companyProjectWorkloadNote" class="field-hint company-project-note" hidden>회사 프로젝트의 업무량은 상위 회사 업무에 포함됩니다.</p>
+
+        <menu class="dialog-actions">
+          <span class="danger-action-group">
+            <button id="deleteTask" type="button" class="danger-button">삭제</button>
+            <button id="completeTask" type="button" class="ghost-button">완료 처리</button>
+          </span>
+          <button id="saveTask" value="default" type="submit">저장</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="energyDialog" class="entry-dialog">
+      <form method="dialog" id="energyEditForm">
+        <div class="dialog-heading">
+          <div>
+            <h3>컨디션 기록</h3>
+            <p id="energyDialogMeta"></p>
+          </div>
+          <button value="cancel" type="submit" class="icon-button" aria-label="닫기">×</button>
+        </div>
+
+        <label>
+          <span>내 컨디션</span>
+          <div class="energy-slider-wrap">
+            <input id="energyLevel" type="range" min="0" max="100" step="1" value="60" />
+            <div class="energy-marks" aria-label="컨디션 기준점">
+              <button type="button" class="energy-mark" data-energy="40" style="left: 14%">🤒<span>40</span></button>
+              <button type="button" class="energy-mark" data-energy="60" style="left: 38%">😐<span>60</span></button>
+              <button type="button" class="energy-mark" data-energy="80" style="left: 62%">🙂<span>80</span></button>
+              <button type="button" class="energy-mark" data-energy="100" style="left: 86%">😄<span>100</span></button>
+            </div>
+            <strong id="energyValue">80</strong>
+          </div>
+        </label>
+
+        <menu class="dialog-actions split-actions">
+          <button id="deleteEnergy" type="button" class="danger-button">기록 삭제</button>
+          <span class="action-group">
+            <button value="cancel" type="submit" class="ghost-button">취소</button>
+            <button id="saveEnergy" value="default" type="submit">저장</button>
+          </span>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="app.js"></script>
+  </body>
+</html>
