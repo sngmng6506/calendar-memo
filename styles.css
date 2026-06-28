@@ -254,7 +254,8 @@ button:hover {
   display: grid;
   align-content: start;
   gap: 12px;
-  min-width: 190px;
+  min-width: 0;
+  width: max-content;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -263,7 +264,35 @@ button:hover {
 
 .tool-stack {
   display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, auto);
+  grid-auto-columns: 150px;
   gap: 8px;
+}
+
+.qr-dialog {
+  width: min(320px, calc(100vw - 24px));
+  padding: 22px;
+  text-align: center;
+}
+
+.qr-canvas {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0 10px;
+  min-height: 220px;
+}
+
+.qr-canvas img,
+.qr-canvas canvas {
+  display: block;
+}
+
+.qr-url {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  word-break: break-all;
 }
 
 .tool-button {
@@ -280,6 +309,10 @@ button:hover {
   padding: 0 14px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.tool-button[hidden] {
+  display: none;
 }
 
 .tool-button b {
@@ -897,9 +930,9 @@ label[hidden],
 }
 
 .group-toggle-button {
-  width: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;

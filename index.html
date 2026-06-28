@@ -119,6 +119,7 @@
               <input id="jumpDate" type="date" class="visually-hidden" aria-label="이동할 날짜" />
               <button id="jumpToday" type="button" class="tool-button">오늘로 이동</button>
               <button id="openExport" type="button" class="tool-button">txt 내보내기</button>
+              <button id="openQr" type="button" class="tool-button">모바일 QR</button>
             </div>
           </div>
         </div>
@@ -135,6 +136,18 @@
         <button type="button" id="closeCompleted" class="icon-button" aria-label="닫기">×</button>
       </div>
       <div id="completedDialogBody" class="completed-list"></div>
+    </dialog>
+
+    <dialog id="qrDialog" class="entry-dialog qr-dialog">
+      <div class="dialog-heading">
+        <div>
+          <h3>모바일 접속 QR</h3>
+          <p>휴대폰 카메라로 스캔하면 같은 페이지가 열립니다. 구글 로그인하면 데이터가 이어집니다.</p>
+        </div>
+        <button type="button" id="closeQr" class="icon-button" aria-label="닫기">×</button>
+      </div>
+      <div id="qrCanvas" class="qr-canvas"></div>
+      <p id="qrUrl" class="qr-url"></p>
     </dialog>
 
     <dialog id="exportDialog" class="entry-dialog">
@@ -291,6 +304,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

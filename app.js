@@ -469,6 +469,27 @@ if (openExport) {
   });
 }
 
+const openQr = document.querySelector("#openQr");
+const qrDialog = document.querySelector("#qrDialog");
+const qrCanvas = document.querySelector("#qrCanvas");
+const qrUrl = document.querySelector("#qrUrl");
+const closeQr = document.querySelector("#closeQr");
+
+if (openQr) {
+  openQr.addEventListener("click", () => {
+    const url = location.protocol.startsWith("http") ? location.origin + location.pathname : location.href;
+    qrUrl.textContent = url;
+    qrCanvas.innerHTML = "";
+    if (typeof window.QRCode === "function") {
+      new window.QRCode(qrCanvas, { text: url, width: 220, height: 220, correctLevel: window.QRCode.CorrectLevel.M });
+    } else {
+      qrCanvas.textContent = "QR 생성 모듈을 불러오지 못했습니다. 아래 주소를 직접 입력하세요.";
+    }
+    qrDialog.showModal();
+  });
+}
+if (closeQr) closeQr.addEventListener("click", () => qrDialog.close());
+
 if (exportForm) {
   exportForm.addEventListener("submit", (event) => {
     if (event.submitter !== confirmExport) return;
