@@ -260,12 +260,13 @@ taskForm.addEventListener("submit", (event) => {
   render();
 });
 
-// 시작일 + N개월로 종료일 빠른 설정(시작일 비어있으면 오늘부터).
+// 종료일을 N개월씩 누적으로 늘림. 기준은 현재 종료일(없으면 시작일, 시작일도 없으면 오늘).
 document.querySelectorAll(".quick-month").forEach((btn) => {
   btn.addEventListener("click", () => {
     const months = Number(btn.dataset.months) || 0;
     if (!startDate.value) startDate.value = toInputDate(new Date());
-    endDate.value = toInputDate(addMonths(new Date(`${startDate.value}T00:00:00`), months));
+    const base = endDate.value || startDate.value;
+    endDate.value = toInputDate(addMonths(new Date(`${base}T00:00:00`), months));
     endDate.setCustomValidity("");
   });
 });
@@ -441,7 +442,20 @@ completeTask.addEventListener("click", () => {
 openCompleted.addEventListener("click", () => completedDialog.showModal());
 
 const jumpDate = document.querySelector("#jumpDate");
+const jumpDateBtn = document.querySelector("#jumpDateBtn");
 const jumpToday = document.querySelector("#jumpToday");
+if (jumpDateBtn && jumpDate) {
+  jumpDateBtn.addEventListener("click", () => {
+    if (typeof jumpDate.showPicker === "function") {
+      try {
+        jumpDate.showPicker();
+        return;
+      } catch {}
+    }
+    jumpDate.focus();
+    jumpDate.click();
+  });
+}
 if (jumpDate) jumpDate.addEventListener("change", () => jumpToDate(jumpDate.value));
 if (jumpToday) {
   jumpToday.addEventListener("click", () => {
