@@ -985,7 +985,9 @@ function getVisibleTimelineTasks() {
 
 // 완료한 목표 보관함: 도구 버튼(개수 표시) + 다이얼로그에 목표별 기록 이력 + 되돌리기.
 function updateCompletedUI() {
-  const completed = state.tasks.filter((task) => task.completed && !task.fixed);
+  const completed = state.tasks
+    .filter((task) => task.completed && !task.fixed)
+    .sort((a, b) => (a.start !== b.start ? (a.start < b.start ? -1 : 1) : a.end < b.end ? -1 : 1));
   if (completed.length === 0) {
     openCompleted.hidden = true;
     if (completedDialog.open) completedDialog.close();
@@ -999,7 +1001,7 @@ function updateCompletedUI() {
   completed.forEach((task) => {
     const card = createElement("div", "completed-goal");
     const head = createElement("div", "completed-goal-head");
-    head.innerHTML = `<strong>${escapeHtml(task.name)}</strong><span>${formatShortDate(task.start)}-${formatShortDate(task.end)}</span>`;
+    head.innerHTML = `<strong>${escapeHtml(task.name)}</strong><span>${formatFullDate(task.start)} - ${formatFullDate(task.end)}</span>`;
     const restore = createElement("button", "ghost-button restore-button", "되돌리기");
     restore.type = "button";
     restore.addEventListener("click", () => {
@@ -1024,7 +1026,7 @@ function updateCompletedUI() {
           ? `<b class="${entry.delta < 0 ? "neg" : "pos"}">${entry.delta > 0 ? "+" : ""}${entry.delta}%</b>`
           : "";
         const text = entry.note || entry.trouble || entry.extra || "";
-        li.innerHTML = `${milestone}<span class="ce-date">${formatShortDate(date)}</span>${delta}<span class="ce-text">${escapeHtml(text)}</span>`;
+        li.innerHTML = `${milestone}<span class="ce-date">${formatFullDate(date)}</span>${delta}<span class="ce-text">${escapeHtml(text)}</span>`;
         ul.append(li);
       });
       card.append(ul);
@@ -2180,6 +2182,11 @@ function formatDate(date) {
 function formatShortDate(date) {
   const parsed = new Date(`${date}T00:00:00`);
   return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+}
+
+// 년/월/일 표기 (예: 2026.06.28)
+function formatFullDate(date) {
+  return String(date).replaceAll("-", ".");
 }
 
 function getHolidayName(date) {

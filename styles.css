@@ -1126,7 +1126,8 @@ label[hidden],
 .completed-entries .ce-date {
   color: var(--ink);
   font-weight: 800;
-  min-width: 44px;
+  min-width: 78px;
+  white-space: nowrap;
 }
 
 .completed-entries b.pos,
