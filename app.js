@@ -260,6 +260,16 @@ taskForm.addEventListener("submit", (event) => {
   render();
 });
 
+// 시작일 + N개월로 종료일 빠른 설정(시작일 비어있으면 오늘부터).
+document.querySelectorAll(".quick-month").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const months = Number(btn.dataset.months) || 0;
+    if (!startDate.value) startDate.value = toInputDate(new Date());
+    endDate.value = toInputDate(addMonths(new Date(`${startDate.value}T00:00:00`), months));
+    endDate.setCustomValidity("");
+  });
+});
+
 recurringForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const months = Math.max(1, Math.floor(Number(recurringMonths.value) || 1));

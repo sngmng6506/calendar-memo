@@ -280,6 +280,37 @@ button:hover {
   min-height: 46px;
 }
 
+.quick-months {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quick-months-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.board-add-panel .quick-month {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fbfcfb;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.board-add-panel .quick-month:hover {
+  background: #eef2f0;
+  border-color: #cbd5e1;
+}
+
 .tool-jump-label {
   cursor: pointer;
 }
