@@ -731,13 +731,19 @@ function moveWindow(amount) {
   render();
 }
 
-// 선택한 날짜가 보이도록 창을 이동(범위 밖이면 가장 가까운 끝으로).
+// 선택한 날짜가 보이도록 창을 이동. 목표가 없거나 날짜가 보드 범위 밖이면 알리고 이동하지 않음.
 function jumpToDate(dateStr) {
   if (!dateStr) return;
   const allDates = getBoardDates();
-  if (allDates.length === 0) return;
-  let index = allDates.indexOf(dateStr);
-  if (index === -1) index = dateStr < allDates[0] ? 0 : allDates.length - 1;
+  if (allDates.length === 0) {
+    window.alert("등록된 목표가 없어 이동할 수 없습니다.");
+    return;
+  }
+  const index = allDates.indexOf(dateStr);
+  if (index === -1) {
+    window.alert("해당 날짜에는 표시할 일정이 없습니다.");
+    return;
+  }
   const maxStart = Math.max(0, allDates.length - visibleDayCount);
   windowStart = clamp(index - Math.floor(visibleDayCount / 2), 0, maxStart);
   render();
