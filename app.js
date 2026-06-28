@@ -181,6 +181,8 @@ const deltaValue = document.querySelector("#deltaValue");
 const troubleText = document.querySelector("#troubleText");
 const extraText = document.querySelector("#extraText");
 const noteText = document.querySelector("#noteText");
+const entryWorkload = document.querySelector("#entryWorkload");
+const entryWorkloadField = document.querySelector("#entryWorkloadField");
 const deleteEntry = document.querySelector("#deleteEntry");
 const saveEntry = document.querySelector("#saveEntry");
 const taskDialog = document.querySelector("#taskDialog");
@@ -328,6 +330,7 @@ entryForm.addEventListener("submit", (event) => {
   const entry = {
     milestone: isMilestone.checked,
     delta: getProgressDeltaValue(),
+    workload: entryWorkload.value === "" ? null : Math.max(0, Number(entryWorkload.value)),
     trouble: troubleText.value.trim(),
     extra: extraText.value.trim(),
     note: noteText.value.trim(),
@@ -839,6 +842,7 @@ function formatExportEntry(entry) {
   if (entry.milestone) parts.push("마일스톤");
   if (entry.recurring) parts.push("정기");
   if (entry.delta) parts.push(`${entry.delta > 0 ? "+" : ""}${entry.delta}%`);
+  if (entry.workload != null) parts.push(`업무량 ${Math.round(entry.workload)}%`);
   if (entry.note) parts.push(`메모: ${entry.note}`);
   if (entry.trouble) parts.push(`트러블: ${entry.trouble}`);
   if (entry.extra) parts.push(`추가 업무: ${entry.extra}`);
@@ -1542,11 +1546,13 @@ function renderCellContent(entry) {
   const delta = entry.delta
     ? `<span class="delta-badge ${entry.delta < 0 ? "negative" : "positive"}">${entry.delta > 0 ? "+" : ""}${entry.delta}%</span>`
     : "";
+  const workload =
+    entry.workload != null ? `<span class="workload-badge">업무 ${Math.round(entry.workload)}%</span>` : "";
 
   // 노트 텍스트는 셀에 인라인으로 표시하고(잘리면 말줄임) 전체는 hover 툴팁(title)으로도 확인.
   const noteSource = entryNoteText(entry);
   const note = noteSource ? `<span class="cell-note">${escapeHtml(noteSource)}</span>` : "";
-  return `<div class="cell-content"><div class="cell-markers">${markers}</div>${delta}${note}</div>`;
+  return `<div class="cell-content"><div class="cell-markers">${markers}</div>${delta}${workload}${note}</div>`;
 }
 
 function entryNoteText(entry) {
@@ -1619,6 +1625,13 @@ function openEntryDialog(taskId, date, options = {}) {
   dialogMeta.textContent = formatDate(date);
   isMilestone.checked = Boolean(entry.milestone);
   setProgressDeltaValue(entry.delta || 0);
+  // 일자별 업무량: 회사 프로젝트는 업무량이 상위 회사 업무에 포함되므로 입력칸 숨김.
+  const showWorkload = !isCompanyProjectTaskType(task);
+  entryWorkloadField.hidden = !showWorkload;
+  if (showWorkload) {
+    entryWorkload.value = entry.workload != null ? entry.workload : "";
+    entryWorkload.placeholder = `비우면 목표 기본값 ${Math.round(getTaskWorkload(task))}%`;
+  }
   troubleText.value = entry.trouble || "";
   extraText.value = entry.extra || "";
   noteText.value = entry.note || "";
@@ -2260,12 +2273,12 @@ function drawGrid(context, width, height, loadAxisMax = 100) {
   }
 }
 
-// 업무량(날짜) = 그 날짜에 실제 기록/정기 일정이 있는 task들의 소요 시간 합산값.
+// 업무량(날짜) = 그 날짜에 실제 기록/정기 일정이 있는 task들의 업무량 합산값.
 function totalProgressForDate(date) {
   return state.tasks.reduce((sum, task) => {
     if (isCompanyProjectTaskType(task)) return sum;
     if (!hasTaskWorkOn(task, date)) return sum;
-    return sum + getTaskWorkload(task);
+    return sum + getTaskWorkloadOn(task, date);
   }, 0);
 }
 
@@ -2273,6 +2286,15 @@ function getTaskWorkload(task) {
   if (!task || isCompanyProjectTaskType(task)) return 0;
   const hours = getTaskHours(task);
   return hoursToWorkload(hours || 0);
+}
+
+// 일자별 업무량: 해당 날짜에 업무량 기록이 있으면 그 값, 없으면 목표 기본 업무량.
+function getTaskWorkloadOn(task, date) {
+  const entry = task && task.entries[date];
+  if (entry && entry.workload != null && Number.isFinite(Number(entry.workload))) {
+    return Math.max(0, Number(entry.workload));
+  }
+  return getTaskWorkload(task);
 }
 
 function getTaskHours(task) {
@@ -2344,7 +2366,14 @@ function sumProgress(task, dates, throughDate = dates.at(-1)) {
 }
 
 function isEmptyEntry(entry) {
-  return !entry.milestone && entry.delta === 0 && !entry.trouble && !entry.extra && !entry.note;
+  return (
+    !entry.milestone &&
+    entry.delta === 0 &&
+    entry.workload == null &&
+    !entry.trouble &&
+    !entry.extra &&
+    !entry.note
+  );
 }
 
 function expandTaskRange(task, date) {

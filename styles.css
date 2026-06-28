@@ -1033,6 +1033,17 @@ label[hidden],
   color: var(--red);
 }
 
+.workload-badge {
+  justify-self: start;
+  border-radius: 999px;
+  background: #fdeceb;
+  color: var(--red);
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .delta-slider {
   position: relative;
   height: 28px;
