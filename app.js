@@ -820,7 +820,7 @@ function formatExportEntry(entry) {
   if (entry.delta) parts.push(`${entry.delta > 0 ? "+" : ""}${entry.delta}%`);
   if (entry.note) parts.push(`메모: ${entry.note}`);
   if (entry.trouble) parts.push(`트러블: ${entry.trouble}`);
-  if (entry.extra) parts.push(`추가일: ${entry.extra}`);
+  if (entry.extra) parts.push(`추가 업무: ${entry.extra}`);
   return parts.join("  ");
 }
 
@@ -1074,6 +1074,13 @@ function renderTimeline(dates, allDates) {
       </span>
     `;
     if (!isFixed) installTaskDrag(head, task.id);
+    const headActions = createElement("div", "head-actions");
+    const editButton = createElement("button", "edit-task-button", "✎");
+    editButton.type = "button";
+    editButton.draggable = false;
+    editButton.setAttribute("aria-label", `${task.name} 업무 수정`);
+    editButton.addEventListener("click", () => openTaskDialog(task.id));
+    headActions.append(editButton);
     if (isFixed && companyProjectCount > 0) {
       const toggleButton = createElement("button", "group-toggle-button", companyProjectsCollapsed ? "▸" : "▾");
       toggleButton.type = "button";
@@ -1082,14 +1089,9 @@ function renderTimeline(dates, allDates) {
         companyProjectsCollapsed = !companyProjectsCollapsed;
         render();
       });
-      head.prepend(toggleButton);
+      headActions.append(toggleButton);
     }
-    const editButton = createElement("button", "edit-task-button", "✎");
-    editButton.type = "button";
-    editButton.draggable = false;
-    editButton.setAttribute("aria-label", `${task.name} 업무 수정`);
-    editButton.addEventListener("click", () => openTaskDialog(task.id));
-    head.append(editButton);
+    head.append(headActions);
     grid.append(head);
 
     dates.forEach((date) => {
