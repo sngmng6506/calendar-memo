@@ -517,13 +517,19 @@ async function pushBoardToServer() {
 }
 
 // 로그인 옆 동기화 상태 마커 갱신
-const SYNC_LABELS = { saving: "동기화 중…", saved: "동기화됨", error: "동기화 실패" };
+const SYNC_LABELS = { idle: "동기화", saving: "동기화 중…", saved: "동기화됨", error: "동기화 실패" };
+let syncResetTimer = null;
 function setSyncStatus(status) {
   if (!authArea) return;
   const el = authArea.querySelector(".sync-status");
   if (!el) return;
+  clearTimeout(syncResetTimer);
   el.dataset.state = status;
   el.querySelector(".sync-text").textContent = SYNC_LABELS[status] || "";
+  // 저장 완료/실패 표시는 잠깐 보여준 뒤 평소 '동기화'로 복귀
+  if (status === "saved" || status === "error") {
+    syncResetTimer = setTimeout(() => setSyncStatus("idle"), 2000);
+  }
 }
 
 function applyServerBoard(board) {
@@ -584,9 +590,15 @@ function renderAuthArea() {
   if (!cloudClientId) return; // 동기화 미설정/오프라인 → 로컬 전용
 
   if (cloudUser) {
-    const status = createElement("span", "sync-status");
-    status.dataset.state = "saved";
-    status.append(createElement("i", "sync-dot"), createElement("span", "sync-text", "동기화됨"));
+    const status = createElement("button", "sync-status");
+    status.type = "button";
+    status.dataset.state = "idle";
+    status.title = "지금 동기화";
+    status.append(createElement("i", "sync-dot"), createElement("span", "sync-text", "동기화"));
+    status.addEventListener("click", () => {
+      clearTimeout(cloudSaveTimer);
+      pushBoardToServer();
+    });
     const info = createElement("span", "auth-user", cloudUser.email || cloudUser.name || "로그인됨");
     const out = createElement("button", "ghost-button auth-button", "로그아웃");
     out.type = "button";
