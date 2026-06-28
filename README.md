@@ -50,6 +50,100 @@ npm start
 - 한국 공휴일 표시(토요일 파랑, 일요일·공휴일 빨강)
 - 데스크톱/모바일 반응형
 
+## 시스템 아키텍처
+
+```mermaid
+flowchart LR
+  User[사용자] --> Browser[브라우저 웹앱]
+  Browser --> LocalStorage[(localStorage)]
+  Browser --> Static[Express 정적 서빙]
+  Browser --> Api[/Express API/]
+  Browser --> Google[Google 로그인]
+  Google --> Api
+  Api --> Session[JWT 세션 쿠키]
+  Api --> Postgres[(Railway Postgres)]
+  Browser --> Holidays[holidays/*.js]
+```
+
+```mermaid
+flowchart TD
+  App[app.js] --> Timeline[Timeline 렌더링]
+  App --> Wave[Workload Balance 렌더링]
+  App --> Dialogs[목표/날짜/컨디션 Dialog]
+  App --> State[Board State]
+  State --> Tasks[tasks]
+  State --> Energy[energy]
+  State --> Order[taskOrderMode]
+  Tasks --> Workload[업무량 계산]
+  Energy --> Condition[컨디션 보간/예측]
+  Workload --> Wave
+  Condition --> Wave
+```
+
+```mermaid
+sequenceDiagram
+  participant B as 브라우저
+  participant L as localStorage
+  participant A as Express API
+  participant G as Google
+  participant P as Postgres
+
+  B->>L: 로컬 보드 불러오기
+  B->>A: /api/config
+  A-->>B: 동기화 가능 여부
+  B->>G: Google 로그인
+  G-->>B: ID 토큰
+  B->>A: /api/auth/google
+  A->>G: 토큰 검증
+  A-->>B: JWT 세션 쿠키
+  B->>A: /api/board
+  A->>P: 사용자 보드 조회
+  P-->>A: board JSON
+  A-->>B: 서버 보드
+  B->>L: 병합/저장
+  B->>A: 변경 시 /api/board 저장
+  A->>P: board JSON upsert
+```
+
+```mermaid
+erDiagram
+  BOARD_STATE ||--o{ TASK : contains
+  BOARD_STATE ||--o{ ENERGY_RECORD : contains
+  TASK ||--o{ DATE_ENTRY : contains
+
+  BOARD_STATE {
+    array tasks
+    object energy
+    string taskOrderMode
+  }
+
+  TASK {
+    string id
+    string name
+    string startDate
+    string endDate
+    number hours
+    object entries
+    object recurring
+    boolean completed
+    string parentId
+  }
+
+  DATE_ENTRY {
+    boolean milestone
+    number progressDelta
+    number workload
+    string trouble
+    string extra
+    string note
+  }
+
+  ENERGY_RECORD {
+    string date
+    number value
+  }
+```
+
 ## 클라우드 동기화 (Railway + 구글 로그인)
 
 `server.js`(Express)가 정적 프론트와 `/api/*`를 함께 제공합니다. 보드는 사용자별 한 행(JSONB)으로 Postgres `boards` 테이블에 저장됩니다. 로그인하면 서버 데이터를 우선 사용하고, 서버가 비어 있으면 현재 로컬 보드를 올립니다. 우상단 동기화 버튼으로 상태를 확인하거나 즉시 동기화할 수 있습니다.
