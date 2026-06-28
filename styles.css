@@ -215,7 +215,7 @@ button:hover {
   gap: 12px;
 }
 
-/* 날짜(시작/종료) + 빠른 종료일 버튼을 한 줄에 배치 */
+/* 날짜(시작/종료) + 빠른 종료일 버튼을 한 줄에 꽉 차게 배치 */
 .date-block {
   display: flex;
   align-items: flex-end;
@@ -225,12 +225,19 @@ button:hover {
 }
 
 .date-block .date-pair {
-  flex: none;
-  gap: 8px;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
 }
 
 .date-block .date-pair label {
-  width: 140px;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+
+.date-block .quick-months {
+  flex: none;
 }
 
 .board-add-panel {
@@ -1471,7 +1478,7 @@ label[hidden],
   gap: 10px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1340px) {
   .app-shell {
     width: min(100vw - 20px, 1800px);
     padding-top: 10px;
