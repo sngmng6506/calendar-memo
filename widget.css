@@ -1,0 +1,292 @@
+:root {
+  --widget-bg: rgba(16, 22, 20, 0.42);
+  --widget-surface: rgba(255, 255, 255, 0.12);
+  --widget-surface-strong: rgba(255, 255, 255, 0.22);
+  --widget-line: rgba(255, 255, 255, 0.18);
+  --widget-ink: rgba(255, 255, 255, 0.92);
+  --widget-muted: rgba(255, 255, 255, 0.64);
+  --load: #c94141;
+  --energy: #3467c2;
+  --milestone: #f7c948;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(52, 103, 194, 0.2), transparent 26%),
+    linear-gradient(135deg, #16201b, #26342f 42%, #111816);
+  color: var(--widget-ink);
+  font-family:
+    Inter, Pretendard, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid var(--widget-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--widget-ink);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.widget-shell {
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.widget-panel {
+  position: relative;
+  min-height: calc(100vh - 36px);
+  overflow: hidden;
+  border: 1px solid var(--widget-line);
+  border-radius: 12px;
+  background: var(--widget-bg);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+#waveCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.56;
+  pointer-events: none;
+}
+
+.widget-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 12px;
+}
+
+.range-label {
+  margin: 0 0 4px;
+  color: var(--widget-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.widget-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.status-bar {
+  position: relative;
+  z-index: 2;
+  min-height: 26px;
+  padding: 0 20px 10px;
+  color: var(--widget-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-bar[data-state="error"] {
+  color: #ffd2d2;
+}
+
+.calendar-grid {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 150px repeat(var(--days), minmax(70px, 1fr));
+  gap: 1px;
+  padding: 0 20px 20px;
+  min-width: 900px;
+}
+
+.grid-cell {
+  min-height: 52px;
+  border: 1px solid var(--widget-line);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 8px;
+}
+
+.grid-cell.header,
+.grid-cell.label {
+  background: rgba(255, 255, 255, 0.14);
+  font-weight: 900;
+}
+
+.grid-cell.header {
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.date-day {
+  color: var(--widget-muted);
+  font-size: 11px;
+}
+
+.date-num {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.grid-cell.today {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.grid-cell.weekend {
+  background: rgba(201, 65, 65, 0.11);
+}
+
+.grid-cell.label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 150px;
+  color: var(--widget-ink);
+}
+
+.task-label strong {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-label span {
+  color: var(--widget-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.task-cell {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.task-cell.has-work {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.task-cell.milestone {
+  border-color: rgba(247, 201, 72, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(247, 201, 72, 0.62);
+}
+
+.company-row,
+.company-cell {
+  background: rgba(52, 103, 194, 0.14);
+}
+
+.company-project-row,
+.company-project-cell {
+  border-color: rgba(52, 103, 194, 0.36);
+  background: rgba(52, 103, 194, 0.08);
+}
+
+.cell-markers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 10px;
+}
+
+.work-dot,
+.milestone-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.work-dot {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.milestone-dot {
+  background: var(--milestone);
+  box-shadow: 0 0 12px rgba(247, 201, 72, 0.7);
+}
+
+.cell-note {
+  display: block;
+  overflow: hidden;
+  color: var(--widget-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-state {
+  position: relative;
+  z-index: 2;
+  padding: 28px 20px;
+  color: var(--widget-muted);
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .widget-shell {
+    padding: 10px;
+  }
+
+  .widget-panel {
+    min-height: calc(100vh - 20px);
+  }
+
+  .widget-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .calendar-grid {
+    grid-template-columns: 120px repeat(var(--days), 64px);
+    overflow-x: auto;
+    padding: 0 12px 14px;
+  }
+
+  .grid-cell.label {
+    min-width: 120px;
+  }
+}

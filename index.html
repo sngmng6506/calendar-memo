@@ -48,8 +48,6 @@
         <div class="board-toolbar">
           <div class="legend" aria-label="범례">
             <span><i class="dot milestone"></i>마일스톤</span>
-            <span><i class="dot trouble"></i>트러블</span>
-            <span><i class="dot extra"></i>추가 업무</span>
             <span><i class="dot recurring"></i>정기</span>
             <span><i class="dot energy"></i>컨디션</span>
           </div>
@@ -207,16 +205,6 @@
         </label>
 
         <label>
-          <span>발생한 트러블</span>
-          <textarea id="troubleText" rows="3" placeholder="막힌 점, 리스크, 지연 원인"></textarea>
-        </label>
-
-        <label>
-          <span>추가 업무</span>
-          <textarea id="extraText" rows="3" placeholder="새로 생긴 일, 후속 관리 항목"></textarea>
-        </label>
-
-        <label>
           <span>메모</span>
           <textarea id="noteText" rows="3" placeholder="그날의 진행 내용"></textarea>
         </label>
@@ -310,6 +298,7 @@
     <script src="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+    <script src="core/board-schema.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

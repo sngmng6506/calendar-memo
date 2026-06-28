@@ -1,6 +1,6 @@
-const storageKey = "schedule-wave-board";
-const schemaVersion = 1;
-const companyWorkId = "company-work"; // 컨디션 밑에 고정되는 상시 "회사 업무" 행의 id.
+﻿const storageKey = "schedule-wave-board";
+const schemaVersion = BoardSchema.SCHEMA_VERSION;
+const companyWorkId = BoardSchema.COMPANY_WORK_ID; // 컨디션 밑에 고정되는 상시 "회사 업무" 행의 id.
 const dayMs = 24 * 60 * 60 * 1000;
 const visibleDayCount = 14;
 
@@ -148,6 +148,8 @@ let companyProjectsCollapsed = false;
 // 클라우드 동기화(구글 로그인) 상태
 let cloudUser = null;
 let cloudClientId = null;
+let cloudPlan = "free";
+let cloudFeatures = { manualSync: true, autoSync: false, widgetAutoRefresh: false };
 let cloudSaveTimer = null;
 
 const taskForm = document.querySelector("#taskForm");
@@ -178,8 +180,6 @@ const dialogMeta = document.querySelector("#dialogMeta");
 const isMilestone = document.querySelector("#isMilestone");
 const progressDelta = document.querySelector("#progressDelta");
 const deltaValue = document.querySelector("#deltaValue");
-const troubleText = document.querySelector("#troubleText");
-const extraText = document.querySelector("#extraText");
 const noteText = document.querySelector("#noteText");
 const entryWorkload = document.querySelector("#entryWorkload");
 const entryWorkloadField = document.querySelector("#entryWorkloadField");
@@ -331,8 +331,6 @@ entryForm.addEventListener("submit", (event) => {
     milestone: isMilestone.checked,
     delta: getProgressDeltaValue(),
     workload: entryWorkload.value === "" ? null : Math.max(0, Number(entryWorkload.value)),
-    trouble: troubleText.value.trim(),
-    extra: extraText.value.trim(),
     note: noteText.value.trim(),
   };
 
@@ -562,7 +560,7 @@ function loadState() {
   try {
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed.tasks)) return structuredClone(sampleState);
-    if (isLegacySample(parsed)) return structuredClone(sampleState);
+    if (BoardSchema.isLegacySample(parsed)) return structuredClone(sampleState);
     return migrateState(parsed);
   } catch {
     return structuredClone(sampleState);
@@ -571,12 +569,7 @@ function loadState() {
 
 // 저장 데이터를 현재 스키마로 비파괴적으로 끌어올립니다. 새 버전이 생기면 단계별 변환을 여기에 추가합니다.
 function migrateState(parsed) {
-  if (!parsed.energy || typeof parsed.energy !== "object") parsed.energy = {};
-  if (!parsed.taskOrderMode) parsed.taskOrderMode = "due";
-  ensureCompanyWorkTask(parsed);
-  if (parsed.taskOrderMode !== "manual") sortTasksByDueDate(parsed.tasks);
-  parsed.schemaVersion = schemaVersion;
-  return parsed;
+  return BoardSchema.normalizeBoard(parsed);
 }
 
 function saveState() {
@@ -590,6 +583,10 @@ function saveState() {
 function scheduleCloudSave() {
   if (!cloudUser) return;
   clearTimeout(cloudSaveTimer);
+  if (!cloudFeatures.autoSync) {
+    setSyncStatus("idle");
+    return;
+  }
   setSyncStatus("saving");
   cloudSaveTimer = setTimeout(pushBoardToServer, 800);
 }
@@ -644,6 +641,15 @@ async function fetchServerBoard() {
 }
 
 // 로그인 직후: 서버 보드가 있으면 사용(서버 우선), 없으면 현재 로컬을 서버로 올림(병합).
+function applyCloudEntitlements(data) {
+  cloudPlan = data?.plan || "free";
+  cloudFeatures = {
+    manualSync: data?.features?.manualSync !== false,
+    autoSync: Boolean(data?.features?.autoSync),
+    widgetAutoRefresh: Boolean(data?.features?.widgetAutoRefresh),
+  };
+}
+
 async function syncAfterLogin() {
   const serverBoard = await fetchServerBoard();
   if (serverBoard) {
@@ -651,6 +657,13 @@ async function syncAfterLogin() {
   } else {
     await pushBoardToServer();
   }
+}
+
+async function manualSyncNow() {
+  if (!cloudUser || !cloudFeatures.manualSync) return;
+  clearTimeout(cloudSaveTimer);
+  await pushBoardToServer();
+  renderAuthArea();
 }
 
 async function onGoogleCredential(response) {
@@ -662,6 +675,7 @@ async function onGoogleCredential(response) {
     });
     if (!res.ok) throw new Error("auth failed");
     const data = await res.json();
+    applyCloudEntitlements(data);
     cloudUser = data.user;
     await syncAfterLogin();
     renderAuthArea();
@@ -675,6 +689,7 @@ async function signOutCloud() {
     await fetch("/api/auth/logout", { method: "POST" });
   } catch {}
   cloudUser = null;
+  applyCloudEntitlements(null);
   renderAuthArea();
 }
 
@@ -690,8 +705,7 @@ function renderAuthArea() {
     status.title = "지금 동기화";
     status.append(createElement("i", "sync-dot"), createElement("span", "sync-text", "동기화"));
     status.addEventListener("click", () => {
-      clearTimeout(cloudSaveTimer);
-      pushBoardToServer();
+      manualSyncNow();
     });
     const info = createElement("span", "auth-user", cloudUser.email || cloudUser.name || "로그인됨");
     const out = createElement("button", "ghost-button auth-button", "로그아웃");
@@ -730,8 +744,10 @@ async function initCloud() {
 
   try {
     const me = await fetch("/api/me").then((r) => r.json());
+    applyCloudEntitlements(me);
     cloudUser = me.user || null;
   } catch {
+    applyCloudEntitlements(null);
     cloudUser = null;
   }
   if (cloudUser) {
@@ -844,8 +860,6 @@ function formatExportEntry(entry) {
   if (entry.delta) parts.push(`${entry.delta > 0 ? "+" : ""}${entry.delta}%`);
   if (entry.workload != null) parts.push(`업무량 ${Math.round(entry.workload)}%`);
   if (entry.note) parts.push(`메모: ${entry.note}`);
-  if (entry.trouble) parts.push(`트러블: ${entry.trouble}`);
-  if (entry.extra) parts.push(`추가 업무: ${entry.extra}`);
   return parts.join("  ");
 }
 
@@ -1237,7 +1251,7 @@ function updateCompletedUI() {
         const delta = entry.delta
           ? `<b class="${entry.delta < 0 ? "neg" : "pos"}">${entry.delta > 0 ? "+" : ""}${entry.delta}%</b>`
           : "";
-        const text = entry.note || entry.trouble || entry.extra || "";
+        const text = entry.note || "";
         li.innerHTML = `${milestone}<span class="ce-date">${formatFullDate(date)}</span>${delta}<span class="ce-text">${escapeHtml(text)}</span>`;
         ul.append(li);
       });
@@ -1398,7 +1412,7 @@ function copyTaskEntry(taskId, sourceDate, targetDate) {
 function sortTasksByDueDateIfAutomatic() {
   if (state.taskOrderMode === "manual") return;
   state.taskOrderMode = "due";
-  sortTasksByDueDate(state.tasks);
+  BoardSchema.sortTasksByDueDate(state.tasks);
 }
 
 function sortTasksByDueDate(tasks) {
@@ -1540,8 +1554,6 @@ function renderCellContent(entry) {
   const markers = [
     entry.recurring ? '<i class="dot recurring"></i>' : "",
     entry.milestone ? '<i class="dot milestone"></i>' : "",
-    entry.trouble ? '<i class="dot trouble"></i>' : "",
-    entry.extra ? '<i class="dot extra"></i>' : "",
   ].join("");
   const delta = entry.delta
     ? `<span class="delta-badge ${entry.delta < 0 ? "negative" : "positive"}">${entry.delta > 0 ? "+" : ""}${entry.delta}%</span>`
@@ -1557,7 +1569,7 @@ function renderCellContent(entry) {
 
 function entryNoteText(entry) {
   if (!entry) return "";
-  return entry.note || entry.trouble || entry.extra || "";
+  return entry.note || "";
 }
 
 function getRecurringEntry(task, date) {
@@ -1632,8 +1644,6 @@ function openEntryDialog(taskId, date, options = {}) {
     entryWorkload.value = entry.workload != null ? entry.workload : "";
     entryWorkload.placeholder = `비우면 목표 기본값 ${Math.round(getTaskWorkload(task))}%`;
   }
-  troubleText.value = entry.trouble || "";
-  extraText.value = entry.extra || "";
   noteText.value = entry.note || "";
   dialog.showModal();
   if (options.focusNote) {
@@ -2370,8 +2380,6 @@ function isEmptyEntry(entry) {
     !entry.milestone &&
     entry.delta === 0 &&
     entry.workload == null &&
-    !entry.trouble &&
-    !entry.extra &&
     !entry.note
   );
 }
@@ -2473,3 +2481,4 @@ function escapeHtml(value) {
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
+

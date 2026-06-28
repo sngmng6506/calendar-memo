@@ -6,6 +6,8 @@ const cookieParser = require("cookie-parser");
 const { Pool } = require("pg");
 const { OAuth2Client } = require("google-auth-library");
 const jwt = require("jsonwebtoken");
+const { getTodaySummary, getRangeSummary } = require("./core/board-metrics");
+const { normalizeBoard } = require("./core/board-schema");
 
 const PORT = process.env.PORT || 3000;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -16,6 +18,17 @@ const IS_PROD = process.env.NODE_ENV === "production";
 const app = express();
 app.use(express.json({ limit: "4mb" }));
 app.use(cookieParser());
+
+function getPlanFeatures() {
+  return {
+    plan: "free",
+    features: {
+      manualSync: true,
+      autoSync: false,
+      widgetAutoRefresh: false,
+    },
+  };
+}
 
 // 공개 프록시(*.proxy.rlwy.net 등)는 SSL 필요. 로컬/Railway 내부망은 SSL 끄기.
 const useSsl =
@@ -88,7 +101,7 @@ app.post("/api/auth/google", async (req, res) => {
     const payload = ticket.getPayload();
     const user = { sub: payload.sub, email: payload.email, name: payload.name };
     setSession(res, user);
-    res.json({ user: { email: user.email, name: user.name } });
+    res.json({ user: { email: user.email, name: user.name }, ...getPlanFeatures(user) });
   } catch (err) {
     console.error("[auth] verify failed", err.message);
     res.status(401).json({ error: "invalid token" });
@@ -102,7 +115,10 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/me", (req, res) => {
   const user = getUser(req);
-  res.json({ user: user ? { email: user.email, name: user.name } : null });
+  res.json({
+    user: user ? { email: user.email, name: user.name } : null,
+    ...getPlanFeatures(user),
+  });
 });
 
 // 사용자 보드 불러오기.
@@ -110,24 +126,52 @@ app.get("/api/board", requireUser, async (req, res) => {
   if (!pool) return res.status(503).json({ error: "db not configured" });
   try {
     const result = await pool.query("SELECT data FROM boards WHERE user_id = $1", [req.user.sub]);
-    res.json({ board: result.rows[0] ? result.rows[0].data : null });
+    res.json({ board: result.rows[0] ? normalizeBoard(result.rows[0].data) : null });
   } catch (err) {
     console.error("[board] load failed", err.message);
     res.status(500).json({ error: "load failed" });
   }
 });
 
+// Widget summary for small clients.
+app.get("/api/widget/today", requireUser, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: "db not configured" });
+  try {
+    const result = await pool.query("SELECT data FROM boards WHERE user_id = $1", [req.user.sub]);
+    const board = result.rows[0] ? normalizeBoard(result.rows[0].data) : {};
+    res.json({ summary: getTodaySummary(board, req.query.date) });
+  } catch (err) {
+    console.error("[widget] today failed", err.message);
+    res.status(500).json({ error: "widget summary failed" });
+  }
+});
+
 // 사용자 보드 저장(업서트).
+// Widget date range for calendar-style clients.
+app.get("/api/widget/range", requireUser, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: "db not configured" });
+  try {
+    const result = await pool.query("SELECT data FROM boards WHERE user_id = $1", [req.user.sub]);
+    const board = result.rows[0] ? normalizeBoard(result.rows[0].data) : {};
+    res.json({ summary: getRangeSummary(board, req.query.start, req.query.days) });
+  } catch (err) {
+    console.error("[widget] range failed", err.message);
+    res.status(500).json({ error: "widget range failed" });
+  }
+});
+
+// Save user board.
 app.put("/api/board", requireUser, async (req, res) => {
   if (!pool) return res.status(503).json({ error: "db not configured" });
   const board = req.body && req.body.board;
   if (!board || typeof board !== "object") return res.status(400).json({ error: "invalid board" });
+  const normalizedBoard = normalizeBoard(board);
   try {
     await pool.query(
       `INSERT INTO boards (user_id, email, data, updated_at)
        VALUES ($1, $2, $3, now())
        ON CONFLICT (user_id) DO UPDATE SET data = $3, email = $2, updated_at = now()`,
-      [req.user.sub, req.user.email, board],
+      [req.user.sub, req.user.email, normalizedBoard],
     );
     res.json({ ok: true });
   } catch (err) {
