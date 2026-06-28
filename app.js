@@ -1649,7 +1649,7 @@ function getLoadAxisMax(dates) {
   return Math.max(100, Math.ceil(maxLoad / 25) * 25);
 }
 
-function drawHistoryPreview(context, dates, allDates, width, height) {
+function drawHistoryPreview(context, dates, allDates, width, height, loadAxisMax = 100) {
   const firstIndex = allDates.indexOf(dates[0]);
   const { labelWidth, columnWidth } = getColumnLayout(width, dates.length);
   if (firstIndex <= 0 || labelWidth <= 0 || columnWidth <= 0) return;
@@ -1664,7 +1664,7 @@ function drawHistoryPreview(context, dates, allDates, width, height) {
   const totalValues = previewAndCurrentDates.map((date) => totalProgressForDate(date));
   drawHistoryPath(
     context,
-    makePoints(totalValues, dates.length, width, height, 100, offset),
+    makePoints(totalValues, dates.length, width, height, loadAxisMax, offset),
     "#c94141",
     width < 560 ? 2 : 3,
   );
@@ -1866,7 +1866,7 @@ function drawActiveGraphPoint(context, width, height, maxAxis) {
     return;
   }
 
-  const totalY = valueToGraphY(activeGraphPoint.total, width, height, 100);
+  const totalY = valueToGraphY(activeGraphPoint.total, width, height, maxAxis);
   drawHighlightDot(context, activeGraphPoint.x, totalY, "#c94141");
 
   if (activeGraphPoint.energy.value !== null) {
