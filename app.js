@@ -429,6 +429,17 @@ completeTask.addEventListener("click", () => {
 });
 
 openCompleted.addEventListener("click", () => completedDialog.showModal());
+
+const jumpDate = document.querySelector("#jumpDate");
+const jumpToday = document.querySelector("#jumpToday");
+if (jumpDate) jumpDate.addEventListener("change", () => jumpToDate(jumpDate.value));
+if (jumpToday) {
+  jumpToday.addEventListener("click", () => {
+    const today = toInputDate(new Date());
+    if (jumpDate) jumpDate.value = today;
+    jumpToDate(today);
+  });
+}
 closeCompleted.addEventListener("click", () => completedDialog.close());
 
 energyEditForm.addEventListener("submit", (event) => {
@@ -717,6 +728,18 @@ function moveWindow(amount) {
   const allDates = getBoardDates();
   const maxStart = Math.max(0, allDates.length - visibleDayCount);
   windowStart = clamp(windowStart + amount, 0, maxStart);
+  render();
+}
+
+// 선택한 날짜가 보이도록 창을 이동(범위 밖이면 가장 가까운 끝으로).
+function jumpToDate(dateStr) {
+  if (!dateStr) return;
+  const allDates = getBoardDates();
+  if (allDates.length === 0) return;
+  let index = allDates.indexOf(dateStr);
+  if (index === -1) index = dateStr < allDates[0] ? 0 : allDates.length - 1;
+  const maxStart = Math.max(0, allDates.length - visibleDayCount);
+  windowStart = clamp(index - Math.floor(visibleDayCount / 2), 0, maxStart);
   render();
 }
 

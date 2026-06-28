@@ -280,6 +280,22 @@ button:hover {
   min-height: 46px;
 }
 
+.tool-jump-label {
+  cursor: pointer;
+}
+
+.tool-jump-label input[type="date"] {
+  width: auto;
+  min-height: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .entry-dialog.completed-dialog {
   width: min(560px, calc(100vw - 24px));
   padding: 22px;
