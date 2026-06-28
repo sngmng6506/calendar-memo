@@ -168,7 +168,6 @@ const canvas = document.querySelector("#progressCanvas");
 const graphTooltip = document.querySelector("#graphTooltip");
 const conditionLegend = document.querySelector("#conditionLegend");
 const milestoneLegend = document.querySelector("#milestoneLegend");
-const resetDemo = document.querySelector("#resetDemo");
 const totalGraphMode = document.querySelector("#totalGraphMode");
 const taskGraphMode = document.querySelector("#taskGraphMode");
 const prevWindow = document.querySelector("#prevWindow");
@@ -358,13 +357,6 @@ deleteEntry.addEventListener("click", () => {
   render();
 });
 
-resetDemo.addEventListener("click", () => {
-  state = structuredClone(sampleState);
-  sortTasksByDueDateIfAutomatic();
-  saveState();
-  render();
-});
-
 totalGraphMode.addEventListener("click", () => {
   graphMode = "total";
   render();
@@ -457,6 +449,44 @@ if (jumpDateBtn && jumpDate) {
   });
 }
 if (jumpDate) jumpDate.addEventListener("change", () => jumpToDate(jumpDate.value));
+
+const openExport = document.querySelector("#openExport");
+const exportDialog = document.querySelector("#exportDialog");
+const exportForm = document.querySelector("#exportForm");
+const exportStart = document.querySelector("#exportStart");
+const exportEnd = document.querySelector("#exportEnd");
+const confirmExport = document.querySelector("#confirmExport");
+
+if (openExport) {
+  openExport.addEventListener("click", () => {
+    const allDates = getBoardDates();
+    if (allDates.length === 0) {
+      window.alert("내보낼 기록이 없습니다.");
+      return;
+    }
+    exportStart.value = allDates[0];
+    exportEnd.value = allDates.at(-1);
+    exportDialog.showModal();
+  });
+}
+
+if (exportForm) {
+  exportForm.addEventListener("submit", (event) => {
+    if (event.submitter !== confirmExport) return;
+    event.preventDefault();
+    const from = exportStart.value;
+    const to = exportEnd.value;
+    if (!from || !to) return;
+    if (from > to) {
+      exportEnd.setCustomValidity("종료일은 시작일 이후여야 합니다.");
+      exportEnd.reportValidity();
+      return;
+    }
+    exportEnd.setCustomValidity("");
+    downloadText(`업무일정_${from}_${to}.txt`, buildExportText(from, to));
+    exportDialog.close();
+  });
+}
 if (jumpToday) {
   jumpToday.addEventListener("click", () => {
     const today = toInputDate(new Date());
@@ -771,6 +801,123 @@ function jumpToDate(dateStr) {
   const maxStart = Math.max(0, allDates.length - visibleDayCount);
   windowStart = clamp(index - Math.floor(visibleDayCount / 2), 0, maxStart);
   render();
+}
+
+// ===== txt 내보내기 =====
+const EXPORT_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 해당 날짜의 task 기록(정기 표시 포함). 기록이 없으면 null.
+function getExportEntry(task, date) {
+  const merged = mergeEntries(getRecurringEntry(task, date), task.entries[date]);
+  if (!merged) return null;
+  if (isEmptyEntry(merged) && !merged.recurring) return null;
+  return merged;
+}
+
+// 한 기록을 한 줄 텍스트로.
+function formatExportEntry(entry) {
+  const parts = [];
+  if (entry.milestone) parts.push("마일스톤");
+  if (entry.recurring) parts.push("정기");
+  if (entry.delta) parts.push(`${entry.delta > 0 ? "+" : ""}${entry.delta}%`);
+  if (entry.note) parts.push(`메모: ${entry.note}`);
+  if (entry.trouble) parts.push(`트러블: ${entry.trouble}`);
+  if (entry.extra) parts.push(`추가일: ${entry.extra}`);
+  return parts.join("  ");
+}
+
+// from~to(YYYY-MM-DD, 포함) 범위의 기록을 날짜순+목표별+컨디션으로 정리한 텍스트.
+function buildExportText(from, to) {
+  const tasks = state.tasks;
+  const dates = [];
+  for (let d = new Date(`${from}T00:00:00`), end = new Date(`${to}T00:00:00`); d <= end; d = addDays(d, 1)) {
+    dates.push(toInputDate(d));
+  }
+
+  let recordCount = 0;
+  let milestoneCount = 0;
+  const energyValues = [];
+  dates.forEach((date) => {
+    tasks.forEach((task) => {
+      const entry = getExportEntry(task, date);
+      if (!entry) return;
+      recordCount += 1;
+      if (entry.milestone) milestoneCount += 1;
+    });
+    const energy = getEnergyForDate(date);
+    if (energy.type === "actual") energyValues.push(energy.value);
+  });
+  const avgEnergy = energyValues.length
+    ? Math.round(energyValues.reduce((sum, v) => sum + v, 0) / energyValues.length)
+    : null;
+
+  const taskTitle = (task) =>
+    task.fixed
+      ? "■ 회사 업무"
+      : `■ ${task.completed ? "[완료] " : ""}${task.name} (${task.start} ~ ${task.end})`;
+  const dayTaskLabel = (task) => (task.completed ? `[완료] ${task.name}` : task.fixed ? "회사 업무" : task.name);
+
+  const lines = [];
+  lines.push("업무 · 일정 관리 내보내기");
+  lines.push(`기간: ${from} ~ ${to}`);
+  const summary = [`총 기록 ${recordCount}건`];
+  if (avgEnergy !== null) summary.push(`평균 컨디션 ${avgEnergy}`);
+  summary.push(`마일스톤 ${milestoneCount}건`);
+  lines.push(summary.join(" · "));
+  lines.push("=".repeat(44));
+  lines.push("");
+
+  // 날짜순
+  lines.push("=== 날짜순 ===");
+  dates.forEach((date) => {
+    const dayLines = [];
+    const energy = getEnergyForDate(date);
+    if (energy.type === "actual") dayLines.push(`  컨디션: ${energy.value}`);
+    tasks.forEach((task) => {
+      const entry = getExportEntry(task, date);
+      if (!entry) return;
+      dayLines.push(`  [${dayTaskLabel(task)}] ${formatExportEntry(entry)}`.replace(/\s+$/, ""));
+    });
+    if (dayLines.length === 0) return;
+    lines.push(`${date} (${EXPORT_WEEKDAYS[new Date(`${date}T00:00:00`).getDay()]})`);
+    lines.push(...dayLines, "");
+  });
+
+  // 목표별
+  lines.push("=== 목표별 ===");
+  tasks.forEach((task) => {
+    const taskLines = [];
+    dates.forEach((date) => {
+      const entry = getExportEntry(task, date);
+      if (!entry) return;
+      taskLines.push(`  ${date}  ${formatExportEntry(entry)}`.replace(/\s+$/, ""));
+    });
+    if (taskLines.length === 0) return;
+    lines.push(taskTitle(task));
+    lines.push(...taskLines, "");
+  });
+
+  // 컨디션
+  lines.push("[컨디션]");
+  dates.forEach((date) => {
+    const energy = getEnergyForDate(date);
+    if (energy.type === "actual") lines.push(`  ${date}: ${energy.value}`);
+  });
+
+  return lines.join("\n");
+}
+
+// 텍스트를 .txt 파일로 다운로드(Windows 메모장 대비 UTF-8 BOM 포함).
+function downloadText(filename, text) {
+  const blob = new Blob(["﻿" + text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function installDateDrag(element) {

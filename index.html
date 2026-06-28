@@ -40,7 +40,6 @@
               <button id="totalGraphMode" type="button" class="active">전체 흐름</button>
               <button id="taskGraphMode" type="button">목표별 흐름</button>
             </div>
-            <button id="resetDemo" type="button" class="ghost-button">샘플 초기화</button>
           </div>
         </div>
         <canvas id="progressCanvas" width="1500" height="260"></canvas>
@@ -122,6 +121,7 @@
               <button id="jumpDateBtn" type="button" class="tool-button">날짜 바로가기</button>
               <input id="jumpDate" type="date" class="visually-hidden" aria-label="이동할 날짜" />
               <button id="jumpToday" type="button" class="tool-button">오늘로 이동</button>
+              <button id="openExport" type="button" class="tool-button">txt 내보내기</button>
             </div>
           </div>
         </div>
@@ -138,6 +138,34 @@
         <button type="button" id="closeCompleted" class="icon-button" aria-label="닫기">×</button>
       </div>
       <div id="completedDialogBody" class="completed-list"></div>
+    </dialog>
+
+    <dialog id="exportDialog" class="entry-dialog">
+      <form method="dialog" id="exportForm">
+        <div class="dialog-heading">
+          <div>
+            <h3>txt 내보내기</h3>
+            <p>지정한 기간의 기록을 텍스트 파일로 저장합니다.</p>
+          </div>
+          <button value="cancel" type="submit" class="icon-button" aria-label="닫기">×</button>
+        </div>
+
+        <div class="date-edit-grid">
+          <label>
+            <span>시작</span>
+            <input id="exportStart" type="date" required />
+          </label>
+          <label>
+            <span>종료</span>
+            <input id="exportEnd" type="date" required />
+          </label>
+        </div>
+
+        <menu class="dialog-actions split-actions">
+          <button value="cancel" type="submit" class="ghost-button">취소</button>
+          <button id="confirmExport" value="default" type="submit">내보내기</button>
+        </menu>
+      </form>
     </dialog>
 
     <dialog id="entryDialog" class="entry-dialog">
