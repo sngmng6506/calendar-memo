@@ -1523,8 +1523,8 @@ function drawProgress(dates, allDates = getBoardDates()) {
   graphHoverData = [];
 
   drawWeekendBands(context, dates, width, height);
-  // 독립 이중축: 업무량은 100% 초과 가능, 컨디션은 0~energyMax.
-  const loadAxisMax = graphMode === "total" ? getLoadAxisMax(dates) : 100;
+  // 이중축 동기화: 전체 흐름은 업무량 0~energyMax(120)로 컨디션 축과 격자를 맞춤.
+  const loadAxisMax = graphMode === "total" ? energyMax : 100;
   drawGrid(context, width, height, loadAxisMax);
   drawTodayMarker(context, dates, width, height);
 
@@ -1639,7 +1639,9 @@ function drawDiamond(context, x, y, radius, color) {
 
 function drawTotalLine(context, dates, allDates, width, height, maxAxis) {
   const values = dates.map((date) => totalProgressForDate(date));
-  const points = makePoints(values, dates.length, width, height, maxAxis);
+  // 축 천장(120%) 초과 값은 그래프에선 천장에 맞춰 그리고, 툴팁엔 실제값을 보존.
+  const clamped = values.map((value) => Math.min(value, maxAxis));
+  const points = makePoints(clamped, dates.length, width, height, maxAxis);
 
   drawWavePath(context, points, "#c94141", width < 560 ? 3 : 5, true, width, height);
   graphHoverData = points.map((point, index) => ({
@@ -1649,11 +1651,6 @@ function drawTotalLine(context, dates, allDates, width, height, maxAxis) {
     energy: getEnergyForDate(dates[index]),
     tasks: [],
   }));
-}
-
-function getLoadAxisMax(dates) {
-  const maxLoad = dates.reduce((max, date) => Math.max(max, totalProgressForDate(date)), 0);
-  return Math.max(100, Math.ceil(maxLoad / 25) * 25);
 }
 
 function drawHistoryPreview(context, dates, allDates, width, height, loadAxisMax = 100) {
@@ -1668,7 +1665,9 @@ function drawHistoryPreview(context, dates, allDates, width, height, loadAxisMax
   const previewAndCurrentDates = [...previewDates, dates[0]];
   const offset = -previewCount;
 
-  const totalValues = previewAndCurrentDates.map((date) => totalProgressForDate(date));
+  const totalValues = previewAndCurrentDates.map((date) =>
+    Math.min(totalProgressForDate(date), loadAxisMax),
+  );
   drawHistoryPath(
     context,
     makePoints(totalValues, dates.length, width, height, loadAxisMax, offset),
@@ -1873,7 +1872,7 @@ function drawActiveGraphPoint(context, width, height, maxAxis) {
     return;
   }
 
-  const totalY = valueToGraphY(activeGraphPoint.total, width, height, maxAxis);
+  const totalY = valueToGraphY(Math.min(activeGraphPoint.total, maxAxis), width, height, maxAxis);
   drawHighlightDot(context, activeGraphPoint.x, totalY, "#c94141");
 
   if (activeGraphPoint.energy.value !== null) {
