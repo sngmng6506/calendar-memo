@@ -452,6 +452,13 @@ deleteEnergy.addEventListener("click", () => {
   render();
 });
 
+// 닫기/취소 버튼(value="cancel")을 submit이 아닌 일반 버튼으로 만들어,
+// 입력 중 Enter가 (DOM상 첫 submit인) 닫기 버튼이 아니라 저장 버튼을 누르게 한다.
+document.querySelectorAll('dialog button[value="cancel"]').forEach((btn) => {
+  btn.type = "button";
+  btn.addEventListener("click", () => btn.closest("dialog")?.close());
+});
+
 function initDates() {
   const today = new Date();
   const start = toInputDate(today);
