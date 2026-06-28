@@ -17,8 +17,9 @@ const app = express();
 app.use(express.json({ limit: "4mb" }));
 app.use(cookieParser());
 
-// Railway Postgres는 SSL 필요. 로컬(localhost)은 SSL 끄기.
-const useSsl = DATABASE_URL && !/localhost|127\.0\.0\.1/.test(DATABASE_URL);
+// 공개 프록시(*.proxy.rlwy.net 등)는 SSL 필요. 로컬/Railway 내부망은 SSL 끄기.
+const useSsl =
+  Boolean(DATABASE_URL) && !/localhost|127\.0\.0\.1|\.railway\.internal/.test(DATABASE_URL);
 const pool = DATABASE_URL
   ? new Pool({ connectionString: DATABASE_URL, ssl: useSsl ? { rejectUnauthorized: false } : false })
   : null;
