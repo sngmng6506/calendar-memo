@@ -77,6 +77,21 @@ app.get("/api/config", (req, res) => {
   res.json({ googleClientId: GOOGLE_CLIENT_ID, syncEnabled: Boolean(pool && GOOGLE_CLIENT_ID) });
 });
 
+// 임시 진단: DB 연결 상태 확인(자격증명은 노출 안 함).
+app.get("/api/health", async (req, res) => {
+  let host = null;
+  try {
+    host = DATABASE_URL ? new URL(DATABASE_URL).host : null;
+  } catch {}
+  if (!pool) return res.json({ pool: false, ssl: useSsl, host });
+  try {
+    await pool.query("SELECT 1");
+    res.json({ pool: true, ssl: useSsl, host, db: "ok" });
+  } catch (err) {
+    res.json({ pool: true, ssl: useSsl, host, db: "error", message: err.message });
+  }
+});
+
 // 구글 ID 토큰 검증 → 세션 발급.
 app.post("/api/auth/google", async (req, res) => {
   try {
