@@ -205,7 +205,7 @@ button:hover {
   display: grid;
   gap: 14px;
   align-items: end;
-  grid-template-columns: minmax(220px, 1fr) minmax(340px, 1.5fr) 170px 140px;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(430px, 2fr) 150px 120px;
   max-width: 1180px;
 }
 
@@ -215,27 +215,22 @@ button:hover {
   gap: 12px;
 }
 
-/* 빠른 종료일 버튼은 본행을 건드리지 않도록 명시적으로 배치: 1행=기존, 2행=날짜 아래 */
-.task-form > label:first-child {
-  grid-column: 1;
-  grid-row: 1;
+/* 날짜(시작/종료) + 빠른 종료일 버튼을 한 줄에 배치 */
+.date-block {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
-.task-form > .date-pair {
-  grid-column: 2;
-  grid-row: 1;
+
+.date-block .date-pair {
+  flex: none;
+  gap: 8px;
 }
-.task-form > .add-check {
-  grid-column: 3;
-  grid-row: 1;
-}
-.task-form > button[type="submit"] {
-  grid-column: 4;
-  grid-row: 1;
-}
-.task-form > .quick-months {
-  grid-column: 2 / 5;
-  grid-row: 2;
-  align-self: start;
+
+.date-block .date-pair label {
+  width: 140px;
 }
 
 .board-add-panel {
@@ -306,8 +301,8 @@ button:hover {
 .quick-months {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 5px;
 }
 
 .quick-months-label {
@@ -315,6 +310,7 @@ button:hover {
   font-size: 12px;
   font-weight: 700;
   margin-right: 2px;
+  white-space: nowrap;
 }
 
 .board-add-panel .quick-month {
@@ -326,6 +322,7 @@ button:hover {
   color: var(--ink);
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1369,6 +1366,7 @@ label[hidden],
   border-radius: 8px;
   padding: 0 12px;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .check-row input {
@@ -1421,7 +1419,7 @@ label[hidden],
   gap: 10px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
   .app-shell {
     width: min(100vw - 20px, 1800px);
     padding-top: 10px;

@@ -61,21 +61,23 @@
               <span>목표</span>
               <input id="taskName" type="text" placeholder="예: 고객사 제안서, 운동 루틴, 창업 준비" required />
             </label>
-            <div class="date-pair">
-              <label>
-                <span>시작</span>
-                <input id="startDate" type="date" required />
-              </label>
-              <label>
-                <span>종료</span>
-                <input id="endDate" type="date" required />
-              </label>
-            </div>
-            <div class="quick-months" aria-label="종료일 늘리기">
-              <span class="quick-months-label">종료일 +</span>
-              <button type="button" class="quick-month" data-months="1">1개월</button>
-              <button type="button" class="quick-month" data-months="6">6개월</button>
-              <button type="button" class="quick-month" data-months="12">1년</button>
+            <div class="date-block">
+              <div class="date-pair">
+                <label>
+                  <span>시작</span>
+                  <input id="startDate" type="date" required />
+                </label>
+                <label>
+                  <span>종료</span>
+                  <input id="endDate" type="date" required />
+                </label>
+              </div>
+              <div class="quick-months" aria-label="종료일 늘리기">
+                <span class="quick-months-label">종료일 +</span>
+                <button type="button" class="quick-month" data-months="1">1개월</button>
+                <button type="button" class="quick-month" data-months="6">6개월</button>
+                <button type="button" class="quick-month" data-months="12">1년</button>
+              </div>
             </div>
             <label class="check-row add-check">
               <input id="isCompanyProject" type="checkbox" />
