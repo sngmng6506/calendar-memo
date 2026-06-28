@@ -135,6 +135,22 @@ app.put("/api/board", requireUser, async (req, res) => {
   }
 });
 
+// 백엔드/설정 파일은 정적 서빙에서 제외 (프론트 자산만 노출).
+const BLOCKED_STATIC = new Set([
+  "/server.js",
+  "/package.json",
+  "/package-lock.json",
+  "/.env",
+  "/.env.example",
+  "/.gitignore",
+]);
+app.use((req, res, next) => {
+  if (BLOCKED_STATIC.has(req.path) || req.path.startsWith("/node_modules")) {
+    return res.status(404).json({ error: "not found" });
+  }
+  next();
+});
+
 // 정적 프론트 서빙 (dotfiles 무시 → .env 등 비노출).
 app.use(express.static(path.join(__dirname), { dotfiles: "ignore" }));
 app.get("*", (req, res) => {
