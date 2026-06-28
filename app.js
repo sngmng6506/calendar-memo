@@ -161,7 +161,6 @@ const recurringWeekdays = document.querySelector("#recurringWeekdays");
 const recurringMonths = document.querySelector("#recurringMonths");
 const timeline = document.querySelector("#timeline");
 const rangeLabel = document.querySelector("#rangeLabel");
-const todayLabel = document.querySelector("#todayLabel");
 const authArea = document.querySelector("#authArea");
 const dateRangePill = document.querySelector("#dateRangePill");
 const canvas = document.querySelector("#progressCanvas");
@@ -530,7 +529,6 @@ function initDates() {
   const end = toInputDate(addDays(today, 13));
   startDate.value = start;
   endDate.value = end;
-  todayLabel.textContent = `오늘 · ${formatDate(start)}`;
 }
 
 function loadState() {
@@ -675,7 +673,7 @@ function renderAuthArea() {
     const out = createElement("button", "ghost-button auth-button", "로그아웃");
     out.type = "button";
     out.addEventListener("click", signOutCloud);
-    authArea.append(status, info, out);
+    authArea.append(info, out, status);
     return;
   }
 
