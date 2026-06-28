@@ -118,6 +118,51 @@ button:hover {
   font-size: 13px;
 }
 
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #64748b);
+  white-space: nowrap;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex: none;
+}
+
+.sync-status[data-state="saving"] {
+  color: #2563eb;
+}
+.sync-status[data-state="saving"] .sync-dot {
+  background: #2563eb;
+  animation: sync-pulse 0.9s ease-in-out infinite;
+}
+
+.sync-status[data-state="saved"] {
+  color: #16a34a;
+}
+.sync-status[data-state="saved"] .sync-dot {
+  background: #16a34a;
+}
+
+.sync-status[data-state="error"] {
+  color: #dc2626;
+}
+.sync-status[data-state="error"] .sync-dot {
+  background: #dc2626;
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
 .brand h1,
 .panel-heading h2,
 .board-toolbar h2 {

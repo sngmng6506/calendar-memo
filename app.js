@@ -496,20 +496,34 @@ function saveState() {
 function scheduleCloudSave() {
   if (!cloudUser) return;
   clearTimeout(cloudSaveTimer);
+  setSyncStatus("saving");
   cloudSaveTimer = setTimeout(pushBoardToServer, 800);
 }
 
 async function pushBoardToServer() {
   if (!cloudUser) return;
+  setSyncStatus("saving");
   try {
-    await fetch("/api/board", {
+    const res = await fetch("/api/board", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ board: state }),
     });
+    setSyncStatus(res.ok ? "saved" : "error");
   } catch {
     /* 네트워크 오류 시에도 로컬에는 이미 저장돼 있음 */
+    setSyncStatus("error");
   }
+}
+
+// 로그인 옆 동기화 상태 마커 갱신
+const SYNC_LABELS = { saving: "동기화 중…", saved: "동기화됨", error: "동기화 실패" };
+function setSyncStatus(status) {
+  if (!authArea) return;
+  const el = authArea.querySelector(".sync-status");
+  if (!el) return;
+  el.dataset.state = status;
+  el.querySelector(".sync-text").textContent = SYNC_LABELS[status] || "";
 }
 
 function applyServerBoard(board) {
@@ -570,11 +584,14 @@ function renderAuthArea() {
   if (!cloudClientId) return; // 동기화 미설정/오프라인 → 로컬 전용
 
   if (cloudUser) {
+    const status = createElement("span", "sync-status");
+    status.dataset.state = "saved";
+    status.append(createElement("i", "sync-dot"), createElement("span", "sync-text", "동기화됨"));
     const info = createElement("span", "auth-user", cloudUser.email || cloudUser.name || "로그인됨");
     const out = createElement("button", "ghost-button auth-button", "로그아웃");
     out.type = "button";
     out.addEventListener("click", signOutCloud);
-    authArea.append(info, out);
+    authArea.append(status, info, out);
     return;
   }
 
