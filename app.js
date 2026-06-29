@@ -134,7 +134,7 @@ const sampleState = {
 let state = loadState();
 let activeCell = null;
 let activeTaskId = null;
-let milestoneDraft = new Set(); // 목표 수정 다이얼로그에서 편집 중인 마일스톤 날짜(저장 시 반영).
+let milestoneDraft = new Map(); // 목표 수정 다이얼로그에서 편집 중인 마일스톤(날짜→메모, 저장 시 반영).
 let activeEnergyDate = null;
 let draggedTaskId = null;
 let draggedEntryMove = null;
@@ -200,6 +200,7 @@ const companyProjectWorkloadNote = document.querySelector("#companyProjectWorklo
 const taskDialogTitle = document.querySelector("#taskDialogTitle");
 const milestoneList = document.querySelector("#milestoneList");
 const milestoneDate = document.querySelector("#milestoneDate");
+const milestoneNote = document.querySelector("#milestoneNote");
 const addMilestone = document.querySelector("#addMilestone");
 const deleteTask = document.querySelector("#deleteTask");
 const completeTask = document.querySelector("#completeTask");
@@ -383,8 +384,9 @@ editTaskHours.addEventListener("input", updateWorkloadEditor);
 
 addMilestone.addEventListener("click", () => {
   const date = milestoneDate.value;
-  if (!date || milestoneDraft.has(date)) return;
-  milestoneDraft.add(date);
+  if (!date) return;
+  milestoneDraft.set(date, milestoneNote.value.trim());
+  milestoneNote.value = "";
   renderMilestoneEditor();
 });
 
@@ -429,9 +431,10 @@ function applyMilestoneDraft(task) {
       if (isEmptyEntry(entry)) delete task.entries[date];
     }
   });
-  milestoneDraft.forEach((date) => {
+  milestoneDraft.forEach((note, date) => {
     const entry = task.entries[date] || { milestone: false, delta: 0, workload: null, note: "" };
     entry.milestone = true;
+    entry.note = note;
     task.entries[date] = entry;
     expandTaskRange(task, date);
   });
@@ -1698,12 +1701,13 @@ function openTaskDialog(taskId) {
   companyProjectWorkloadNote.hidden = !isCompanyProjectTaskType(task);
   deleteTask.hidden = isFixed;
   completeTask.hidden = isFixed; // 고정 행(회사 업무)은 완료 처리 불가.
-  milestoneDraft = new Set(
+  milestoneDraft = new Map(
     Object.entries(task.entries)
       .filter(([, entry]) => entry && entry.milestone)
-      .map(([date]) => date),
+      .map(([date, entry]) => [date, entry.note || ""]),
   );
   milestoneDate.value = task.fixed ? "" : task.start;
+  milestoneNote.value = "";
   renderMilestoneEditor();
   updateWorkloadEditor();
   taskDialog.showModal();
@@ -1712,7 +1716,7 @@ function openTaskDialog(taskId) {
 // 목표 수정 다이얼로그의 마일스톤 목록 렌더(현재 편집 중인 draft 기준).
 function renderMilestoneEditor() {
   milestoneList.innerHTML = "";
-  const dates = [...milestoneDraft].sort();
+  const dates = [...milestoneDraft.keys()].sort();
   if (dates.length === 0) {
     milestoneList.append(createElement("li", "milestone-empty", "등록된 마일스톤이 없습니다."));
     return;
@@ -1720,6 +1724,15 @@ function renderMilestoneEditor() {
   dates.forEach((date) => {
     const li = createElement("li", "milestone-item");
     li.append(createElement("span", "milestone-item-date", formatFullDate(date)));
+
+    const noteInput = createElement("input", "milestone-item-note");
+    noteInput.type = "text";
+    noteInput.placeholder = "메모 (선택)";
+    noteInput.value = milestoneDraft.get(date) || "";
+    noteInput.setAttribute("aria-label", `${formatFullDate(date)} 마일스톤 메모`);
+    noteInput.addEventListener("input", () => milestoneDraft.set(date, noteInput.value));
+    li.append(noteInput);
+
     const remove = createElement("button", "icon-button milestone-remove", "×");
     remove.type = "button";
     remove.setAttribute("aria-label", `${formatFullDate(date)} 마일스톤 삭제`);
