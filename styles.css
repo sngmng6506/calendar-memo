@@ -639,6 +639,77 @@ textarea {
   font-weight: 800;
 }
 
+.milestone-editor {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 14px;
+}
+
+.milestone-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milestone-empty {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.milestone-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 6px 6px 12px;
+}
+
+.milestone-item-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.milestone-item-date::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  background: var(--blue);
+  transform: rotate(45deg);
+}
+
+.milestone-remove {
+  min-height: 30px;
+  width: 30px;
+}
+
+.milestone-add {
+  display: flex;
+  gap: 8px;
+}
+
+.milestone-add input[type="date"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.milestone-add .ghost-button {
+  flex: none;
+  min-height: 0;
+  padding: 0 16px;
+}
+
 .company-project-note {
   border: 1px solid rgba(52, 103, 194, 0.22);
   border-radius: 8px;
