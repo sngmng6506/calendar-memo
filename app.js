@@ -1879,7 +1879,7 @@ function drawMilestones(context, dates, allDates, width, height) {
     drawTaskLegend(context, task.name, color, taskIndex, width);
     dates.forEach((date, index) => {
       if (!task.entries[date]?.milestone) return;
-      const value = clamp(sumProgress(task, allDates, date), 0, 100);
+      const value = clamp(milestoneProgressValue(task, date), 0, 100);
       const point = makePoints([value], dates.length, width, height, 100, index)[0];
       drawDiamond(context, point.x, point.y, width < narrowWidth ? 5 : 6, color);
     });
@@ -1892,7 +1892,7 @@ function drawMilestoneLinks(context, dates, allDates, width, height) {
     const points = dates
       .map((date, index) => {
         if (!task.entries[date]?.milestone) return null;
-        const value = clamp(sumProgress(task, allDates, date), 0, 100);
+        const value = clamp(milestoneProgressValue(task, date), 0, 100);
         return makePoints([value], dates.length, width, height, 100, index)[0];
       })
       .filter(Boolean);
@@ -1945,7 +1945,7 @@ function setMilestoneHoverData(dates, allDates, width, height) {
       .filter((task) => task.entries[date]?.milestone)
       .map((task) => ({
         name: task.name,
-        progress: clamp(sumProgress(task, allDates, date), 0, 100),
+        progress: clamp(milestoneProgressValue(task, date), 0, 100),
       })),
   }));
 }
@@ -2063,7 +2063,7 @@ function drawTaskLines(context, dates, allDates, width, height) {
       .filter((task) => hasTaskWorkOn(task, date))
       .map((task) => ({
         name: task.name,
-        progress: clamp(sumProgress(task, allDates, date), 0, 100),
+        progress: clamp(milestoneProgressValue(task, date), 0, 100),
       })),
   }));
 }
@@ -2192,7 +2192,7 @@ function drawActiveGraphPoint(context, width, height, maxAxis) {
     const allDates = getBoardDates();
     state.tasks.forEach((task, taskIndex) => {
       if (!task.entries[date]?.milestone) return;
-      const value = clamp(sumProgress(task, allDates, date), 0, 100);
+      const value = clamp(milestoneProgressValue(task, date), 0, 100);
       const y = valueToGraphY(value, width, height, 100);
       drawHighlightDot(context, activeGraphPoint.x, y, taskPalette[taskIndex % taskPalette.length]);
     });
@@ -2444,6 +2444,18 @@ function sumProgress(task, dates, throughDate = dates.at(-1)) {
   return dates
     .filter((date) => date >= task.start && date <= throughDate)
     .reduce((sum, date) => sum + Number(task.entries[date]?.delta || 0), 0);
+}
+
+// 목표별 흐름에서 마일스톤 세로 위치(%): 그 목표의 마일스톤들을 시간순으로 균등 분포.
+// 진척률 변화 없이 마일스톤만 등록해도 항상 0%보다 위에 올라가 보이도록 한다.
+function milestoneProgressValue(task, date) {
+  const milestoneDates = Object.keys(task.entries)
+    .filter((key) => task.entries[key] && task.entries[key].milestone)
+    .sort();
+  const total = milestoneDates.length;
+  const index = milestoneDates.indexOf(date);
+  if (total === 0 || index < 0) return 0;
+  return Math.round(((index + 1) / total) * 100);
 }
 
 function isEmptyEntry(entry) {
