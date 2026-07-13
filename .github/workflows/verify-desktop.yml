@@ -1,0 +1,36 @@
+name: Verify web and Windows desktop
+
+on:
+  pull_request:
+
+jobs:
+  web-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+
+  windows-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.0
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm install
+      - name: Build desktop frontend
+        working-directory: desktop
+        run: npm run build
+      - name: Check Tauri Rust crate
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
