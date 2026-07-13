@@ -11,9 +11,15 @@ const { normalizeBoard } = require("./core/board-schema");
 
 const PORT = process.env.PORT || 3000;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const IS_PROD = process.env.NODE_ENV === "production";
+
+// prod에서 JWT_SECRET 미설정 시 조용히 취약한 기본값으로 뜨지 않도록 기동 실패.
+if (IS_PROD && !process.env.JWT_SECRET) {
+  console.error("[fatal] JWT_SECRET must be set in production");
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 const app = express();
 app.use(express.json({ limit: "4mb" }));
@@ -125,8 +131,16 @@ app.get("/api/me", (req, res) => {
 app.get("/api/board", requireUser, async (req, res) => {
   if (!pool) return res.status(503).json({ error: "db not configured" });
   try {
-    const result = await pool.query("SELECT data FROM boards WHERE user_id = $1", [req.user.sub]);
-    res.json({ board: result.rows[0] ? normalizeBoard(result.rows[0].data) : null });
+    const result = await pool.query(
+      "SELECT data, updated_at FROM boards WHERE user_id = $1",
+      [req.user.sub],
+    );
+    const row = result.rows[0];
+    const updatedAt = row ? new Date(row.updated_at).getTime() : null;
+    const normalized = row ? normalizeBoard(row.data) : null;
+    // JSONB 내부 updatedAt과 DB 컬럼을 일치시킴(컬럼이 권위).
+    if (normalized && updatedAt != null) normalized.updatedAt = updatedAt;
+    res.json({ board: normalized, updatedAt });
   } catch (err) {
     console.error("[board] load failed", err.message);
     res.status(500).json({ error: "load failed" });
@@ -165,15 +179,34 @@ app.put("/api/board", requireUser, async (req, res) => {
   if (!pool) return res.status(503).json({ error: "db not configured" });
   const board = req.body && req.body.board;
   if (!board || typeof board !== "object") return res.status(400).json({ error: "invalid board" });
+  // 클라이언트가 마지막으로 읽은 서버 버전. 없으면(강제 저장) 잠금 검사 생략.
+  const baseUpdatedAt = Number(req.body.baseUpdatedAt);
+  const hasBase = Number.isFinite(baseUpdatedAt);
   const normalizedBoard = normalizeBoard(board);
   try {
-    await pool.query(
+    if (hasBase) {
+      // 서버 현재 버전이 클라이언트 기준보다 새로우면 충돌 → 덮어쓰지 않음.
+      const current = await pool.query(
+        "SELECT data, updated_at FROM boards WHERE user_id = $1",
+        [req.user.sub],
+      );
+      const row = current.rows[0];
+      if (row && new Date(row.updated_at).getTime() > baseUpdatedAt) {
+        return res.status(409).json({
+          error: "conflict",
+          serverUpdatedAt: new Date(row.updated_at).getTime(),
+          board: normalizeBoard(row.data ?? board),
+        });
+      }
+    }
+    const saved = await pool.query(
       `INSERT INTO boards (user_id, email, data, updated_at)
        VALUES ($1, $2, $3, now())
-       ON CONFLICT (user_id) DO UPDATE SET data = $3, email = $2, updated_at = now()`,
+       ON CONFLICT (user_id) DO UPDATE SET data = $3, email = $2, updated_at = now()
+       RETURNING updated_at`,
       [req.user.sub, req.user.email, normalizedBoard],
     );
-    res.json({ ok: true });
+    res.json({ ok: true, updatedAt: new Date(saved.rows[0].updated_at).getTime() });
   } catch (err) {
     console.error("[board] save failed", err.message);
     res.status(500).json({ error: "save failed" });

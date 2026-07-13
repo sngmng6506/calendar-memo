@@ -152,6 +152,8 @@ let cloudClientId = null;
 let cloudPlan = "free";
 let cloudFeatures = { manualSync: true, autoSync: false, widgetAutoRefresh: false };
 let cloudSaveTimer = null;
+// 마지막으로 서버와 일치한 버전(epoch ms). 저장 시 baseUpdatedAt으로 보내 충돌 감지.
+let serverUpdatedAt = null;
 
 const taskForm = document.querySelector("#taskForm");
 const taskName = document.querySelector("#taskName");
@@ -606,6 +608,7 @@ function migrateState(parsed) {
 function saveState() {
   invalidateDerivedCaches();
   state.schemaVersion = schemaVersion;
+  state.updatedAt = Date.now();
   localStorage.setItem(storageKey, JSON.stringify(state));
   scheduleCloudSave();
 }
@@ -629,9 +632,24 @@ async function pushBoardToServer() {
     const res = await fetch("/api/board", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ board: state }),
+      body: JSON.stringify({ board: state, baseUpdatedAt: serverUpdatedAt }),
     });
-    setSyncStatus(res.ok ? "saved" : "error");
+    if (res.status === 409) {
+      // 다른 기기가 우리가 읽은 이후 저장함. 서버 최신본을 받아 로컬과 최신 기준으로 재조정.
+      const data = await res.json().catch(() => null);
+      if (data && data.board) {
+        reconcileWithServer(data.board, data.serverUpdatedAt);
+      }
+      setSyncStatus("error");
+      return;
+    }
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && typeof data.updatedAt === "number") serverUpdatedAt = data.updatedAt;
+      setSyncStatus("saved");
+    } else {
+      setSyncStatus("error");
+    }
   } catch {
     /* 네트워크 오류 시에도 로컬에는 이미 저장돼 있음 */
     setSyncStatus("error");
@@ -654,10 +672,25 @@ function setSyncStatus(status) {
   }
 }
 
-function applyServerBoard(board) {
+function applyServerBoard(board, updatedAt) {
   state = migrateState(board);
+  if (typeof updatedAt === "number") serverUpdatedAt = updatedAt;
   localStorage.setItem(storageKey, JSON.stringify(state));
   render();
+}
+
+// 로컬과 서버 보드 중 더 최신인 쪽을 채택. 서버가 최신이면 로컬을 덮고,
+// 로컬이 최신이면(또는 서버가 비었으면) 로컬을 서버로 올린다. 무조건 덮어쓰지 않는다.
+function reconcileWithServer(serverBoard, serverTime) {
+  const localTime = Number(state && state.updatedAt) || 0;
+  const remoteTime = Number(serverTime) || 0;
+  if (serverBoard && remoteTime > localTime) {
+    applyServerBoard(serverBoard, remoteTime);
+  } else {
+    // 로컬이 최신이거나 동률 → 서버 기준을 remote로 맞춘 뒤 push.
+    serverUpdatedAt = remoteTime || serverUpdatedAt;
+    pushBoardToServer();
+  }
 }
 
 async function fetchServerBoard() {
@@ -665,7 +698,8 @@ async function fetchServerBoard() {
     const res = await fetch("/api/board");
     if (!res.ok) return null;
     const data = await res.json();
-    return data.board || null;
+    if (!data.board) return null;
+    return { board: data.board, updatedAt: data.updatedAt };
   } catch {
     return null;
   }
@@ -682,10 +716,12 @@ function applyCloudEntitlements(data) {
 }
 
 async function syncAfterLogin() {
-  const serverBoard = await fetchServerBoard();
-  if (serverBoard) {
-    applyServerBoard(serverBoard);
+  const result = await fetchServerBoard();
+  if (result) {
+    reconcileWithServer(result.board, result.updatedAt);
   } else {
+    // 서버가 비어 있음 → 현재 로컬을 올림.
+    serverUpdatedAt = null;
     await pushBoardToServer();
   }
 }
@@ -782,8 +818,8 @@ async function initCloud() {
     cloudUser = null;
   }
   if (cloudUser) {
-    const serverBoard = await fetchServerBoard();
-    if (serverBoard) applyServerBoard(serverBoard);
+    const result = await fetchServerBoard();
+    if (result) reconcileWithServer(result.board, result.updatedAt);
   }
 
   // 구글 GIS 스크립트 로드 타이밍 대응

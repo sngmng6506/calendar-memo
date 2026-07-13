@@ -11,6 +11,7 @@
     if (!Array.isArray(normalized.tasks)) normalized.tasks = [];
     if (!normalized.energy || typeof normalized.energy !== "object") normalized.energy = {};
     if (!normalized.taskOrderMode) normalized.taskOrderMode = "due";
+    if (typeof normalized.updatedAt !== "number") normalized.updatedAt = 0;
     ensureCompanyWorkTask(normalized);
     if (normalized.taskOrderMode !== "manual") sortTasksByDueDate(normalized.tasks);
     normalized.schemaVersion = SCHEMA_VERSION;
