@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>데스크톱 위젯 연결</title>
+    <link rel="stylesheet" href="desktop-setup.css" />
+  </head>
+  <body>
+    <main class="setup-shell">
+      <section class="setup-card">
+        <p class="eyebrow">WORK SCHEDULE BOARD</p>
+        <h1>데스크톱 위젯 연결</h1>
+        <p id="setupStatus" class="status">로그인 상태를 확인하고 있습니다.</p>
+
+        <div id="signedOutHelp" hidden>
+          <p>먼저 메인 웹앱에서 Google 로그인을 완료한 뒤 이 페이지를 다시 열어주세요.</p>
+          <a href="/">메인 웹앱 열기</a>
+        </div>
+
+        <div id="tokenPanel" hidden>
+          <p><strong id="userLabel"></strong> 계정에 연결되는 범위 제한 토큰을 발급합니다.</p>
+          <p class="hint">이 토큰은 일정 읽기와 컨디션 기록만 허용하며 180일 후 만료됩니다.</p>
+          <button id="issueToken" type="button">연결 토큰 발급</button>
+          <label id="tokenField" hidden>
+            <span>데스크톱 앱 설정에 붙여넣기</span>
+            <textarea id="tokenValue" rows="6" readonly></textarea>
+          </label>
+          <button id="copyToken" type="button" class="secondary" hidden>토큰 복사</button>
+        </div>
+      </section>
+    </main>
+    <script src="desktop-setup.js"></script>
+  </body>
+</html>
