@@ -204,14 +204,31 @@ node --check server.js
 ## 파일 구조
 
 ```text
-proj8/
-  index.html      화면 마크업
-  styles.css      스타일
-  app.js          프론트엔드 로직
-  server.js       Express 서버(정적 서빙 + /api)
-  package.json
-  .env.example    환경변수 예시
+work-schedule-board/
+  index.html          화면 마크업
+  styles.css          스타일
+  app.js              프론트엔드 로직(편집기)
+  server.js           Express 서버(정적 서빙 + /api)
+  widget.html/js/css  위젯 원형(얇은 클라이언트)
+  core/
+    board-schema.js   보드 정규화(프론트·서버·위젯 공유)
+    board-metrics.js  업무량·컨디션 계산(프론트·서버·위젯 공유)
   holidays/
-    2026.js
-  README.md
+    2026.js           연도별 공휴일
+  package.json
+  .env.example        환경변수 예시
+  AGENTS.md           AI 협업 영구 계약(규칙의 진실의 원천)
+  CLAUDE.md           Claude Code용 얇은 어댑터
+  docs/               아키텍처·API·데이터 모델·ADR·로드맵
 ```
+
+## 문서
+
+| 문서 | 역할 |
+|------|------|
+| [`AGENTS.md`](AGENTS.md) | AI 협업 영구 계약 — 규칙·불변식·커밋 규칙의 진실의 원천 |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 시스템 구조·데이터 흐름·모듈 경계 |
+| [`docs/API.md`](docs/API.md) | HTTP 엔드포인트 계약 |
+| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | 보드 스키마·동기화·충돌 규칙 |
+| [`docs/adr/`](docs/adr/) | 아키텍처 의사결정 기록 |
+| [`docs/WIDGET_PLAN.md`](docs/WIDGET_PLAN.md) | 위젯/데스크톱 확장 로드맵 |
