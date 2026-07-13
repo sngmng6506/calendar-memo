@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { attach, detach } from "tauri-plugin-wallpaper";
 
 const STORAGE_KEY = "work-schedule-desktop-settings-v1";
@@ -63,6 +64,7 @@ function bindEvents() {
   });
   document.querySelector("#closeGraph").addEventListener("click", () => { graphPanel.hidden = true; });
   document.querySelector("#openSettings").addEventListener("click", openSettingsDialog);
+  document.querySelector("#closeApp").addEventListener("click", () => getCurrentWindow().close());
   toggleAttach.addEventListener("click", () => setAttached(!attached));
   window.addEventListener("resize", drawGraph);
 
