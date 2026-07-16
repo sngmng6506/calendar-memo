@@ -4,6 +4,11 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from typing import Protocol
+
+
+class TextGenerator(Protocol):
+    def generate(self, system_prompt: str, user_prompt: str) -> str: ...
 
 
 class LlmError(RuntimeError):
