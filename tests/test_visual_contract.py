@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from daymark.app import DaymarkApp, resolve_window_opacity
-from daymark.theme import WINDOW_BG
+from daymark.theme import HOLIDAY_RED, SATURDAY_BLUE, WINDOW_BG
 from daymark.ui.day_cell import DayCell
 from daymark.ui.task_row import TaskRow
 
@@ -35,6 +35,29 @@ class VisualContractTest(unittest.TestCase):
             self.assertEqual(0, int(draft.entry.cget("borderwidth")))
             self.assertEqual(WINDOW_BG, draft.entry.cget("background"))
             self.assertEqual("", draft.checkbox.winfo_manager())
+            app._close()
+
+    def test_weekends_and_korean_holidays_use_calendar_colors(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
+            app.current = date(2026, 7, 1)
+            app.render_month()
+            cells = {
+                widget.task_date: widget
+                for widget in app.calendar_frame.grid_slaves()
+                if isinstance(widget, DayCell)
+            }
+            self.assertEqual(HOLIDAY_RED, cells[date(2026, 7, 17)].header.cget("foreground"))
+            self.assertEqual(SATURDAY_BLUE, cells[date(2026, 7, 18)].header.cget("foreground"))
+            self.assertEqual(HOLIDAY_RED, cells[date(2026, 7, 19)].header.cget("foreground"))
+
+            weekday_headers = {
+                widget.cget("text"): widget.cget("foreground")
+                for widget in app.calendar_frame.grid_slaves()
+                if widget.grid_info().get("row") == 0
+            }
+            self.assertEqual(SATURDAY_BLUE, weekday_headers["토"])
+            self.assertEqual(HOLIDAY_RED, weekday_headers["일"])
             app._close()
 
     def test_saved_task_reveals_flat_checkbox(self) -> None:
