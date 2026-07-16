@@ -26,10 +26,16 @@
 - 연결 실패 롤백
 - `--window` / `--desktop` 복구 옵션
 
+## v0.4 Complete
+
+- 선택 모니터 한 대에만 바탕화면 배치
+- 설정에서 모니터 선택
+- 설정에서 투명도 조절 및 즉시 적용
+- WorkerW attach/maintain 시 layered alpha 재적용
+
 ## Next Candidates
 
 - Windows 10/11 실기기 호환성 매트릭스
-- 다중 모니터별 표시 영역 설정
 - Windows 단일 실행 파일 패키징
 - Windows 시작 프로그램 등록
 - 날짜 셀 내부 스크롤 또는 접기
