@@ -9,7 +9,7 @@ from daymark.repository import TaskRepository
 
 class TaskRepositoryTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.repo = TaskRepository(Path(self.temp_dir.name) / "test.db")
         self.day = date(2026, 7, 16)
 
