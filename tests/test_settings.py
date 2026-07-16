@@ -8,7 +8,7 @@ from daymark.settings import AppSettings, SettingsStore, clamp_opacity
 
 class SettingsStoreTest(unittest.TestCase):
     def test_missing_and_corrupt_files_use_defaults(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             path = Path(directory) / "settings.json"
             store = SettingsStore(path)
             defaults = store.load()
@@ -19,7 +19,7 @@ class SettingsStoreTest(unittest.TestCase):
             self.assertEqual("https://api.openai.com/v1", store.load().llm_base_url)
 
     def test_save_persists_monitor_and_opacity_without_api_key(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             path = Path(directory) / "settings.json"
             store = SettingsStore(path)
             store.save(
@@ -38,7 +38,7 @@ class SettingsStoreTest(unittest.TestCase):
             self.assertNotIn("api_key", data)
 
     def test_opacity_is_clamped_when_loaded(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             path = Path(directory) / "settings.json"
             path.write_text(
                 json.dumps(
