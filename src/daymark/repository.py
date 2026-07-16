@@ -34,7 +34,8 @@ class TaskRepository:
                 completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
                 sort_order INTEGER NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                origin_task_id TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_tasks_date_order
                 ON tasks(task_date, sort_order);
@@ -48,6 +49,13 @@ class TaskRepository:
                 created_at TEXT NOT NULL
             );
             """
+        )
+        columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(tasks)")}
+        if "origin_task_id" not in columns:
+            self._connection.execute("ALTER TABLE tasks ADD COLUMN origin_task_id TEXT")
+        self._connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tasks_origin_date "
+            "ON tasks(origin_task_id, task_date)"
         )
         self._connection.commit()
 
@@ -65,7 +73,14 @@ class TaskRepository:
     def list_for_date(self, task_date: date) -> list[Task]:
         return self.list_between(task_date, task_date)
 
-    def add(self, task_date: date, content: str, after_task_id: str | None = None) -> Task:
+    def add(
+        self,
+        task_date: date,
+        content: str,
+        after_task_id: str | None = None,
+        *,
+        origin_task_id: str | None = None,
+    ) -> Task:
         normalized = content.strip()
         if not normalized:
             raise ValueError("Task content must not be blank")
@@ -89,11 +104,14 @@ class TaskRepository:
             sort_order=insert_at,
             created_at=now,
             updated_at=now,
+            origin_task_id=origin_task_id,
         )
         self._connection.execute(
             """
-            INSERT INTO tasks(id, task_date, content, completed, sort_order, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks(
+                id, task_date, content, completed, sort_order, created_at, updated_at, origin_task_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task.id,
@@ -103,6 +121,7 @@ class TaskRepository:
                 task.sort_order,
                 task.created_at.isoformat(),
                 task.updated_at.isoformat(),
+                task.origin_task_id,
             ),
         )
         self._connection.commit()
@@ -146,14 +165,42 @@ class TaskRepository:
         )
         self._connection.commit()
 
-    def move_incomplete(self, source_date: date, target_date: date) -> int:
-        if source_date == target_date:
+    def copy_incomplete_before(self, target_date: date) -> int:
+        """오늘 이전의 미완료 업무를 원본 보존 방식으로 대상 날짜에 복사한다.
+
+        같은 원본에서 파생된 업무는 하루에 한 번만 복사된다. 따라서 버튼을
+        반복해서 눌러도 같은 업무가 중복 생성되지 않는다.
+        """
+        rows = self._connection.execute(
+            """
+            SELECT * FROM tasks
+            WHERE task_date < ?
+            ORDER BY task_date, sort_order, created_at
+            """,
+            (target_date.isoformat(),),
+        ).fetchall()
+        history = [self._to_task(row) for row in rows]
+        if not history:
             return 0
-        pending = [task for task in self.list_for_date(source_date) if not task.completed]
-        for task in pending:
-            self.add(target_date, task.content)
-            self.delete(task.id)
-        return len(pending)
+
+        latest_by_origin: dict[str, Task] = {}
+        for task in history:
+            origin = task.origin_task_id or task.id
+            latest_by_origin[origin] = task
+
+        already_copied = {
+            task.origin_task_id
+            for task in self.list_for_date(target_date)
+            if task.origin_task_id is not None
+        }
+        copied = 0
+        for origin, task in latest_by_origin.items():
+            if task.completed or origin in already_copied:
+                continue
+            self.add(target_date, task.content, origin_task_id=origin)
+            already_copied.add(origin)
+            copied += 1
+        return copied
 
     def save_report(
         self, report_type: str, start_date: date, end_date: date, content: str
@@ -195,4 +242,5 @@ class TaskRepository:
             sort_order=row["sort_order"],
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
+            origin_task_id=row["origin_task_id"],
         )
