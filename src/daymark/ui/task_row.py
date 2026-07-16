@@ -16,8 +16,8 @@ from daymark.theme import (
 
 
 class RoundCheck(tk.Canvas):
-    CLICK_SIZE = 24
-    RADIUS = 7
+    CLICK_SIZE = 22
+    RADIUS = 6
 
     def __init__(self, master: tk.Misc, command: Callable[[], None], *, surface_bg: str) -> None:
         super().__init__(
@@ -153,7 +153,7 @@ class TaskRow(tk.Frame):
             highlightthickness=0,
             font=self.fonts.task,
         )
-        self.entry.pack(side="left", fill="x", expand=True, ipady=5)
+        self.entry.pack(side="left", fill="x", expand=True, ipady=2)
         self.entry.bind("<Return>", self._commit)
         self.entry.bind("<FocusIn>", self._focus_in)
         self.entry.bind("<FocusOut>", self._focus_out)
@@ -180,7 +180,7 @@ class TaskRow(tk.Frame):
 
     def _sync_task_widgets(self) -> None:
         if self.task is not None and not self.checkbox.winfo_manager():
-            self.checkbox.pack(side="left", before=self.entry, padx=(0, 5), pady=1)
+            self.checkbox.pack(side="left", before=self.entry, padx=(0, 4), pady=0)
         elif self.task is None and self.checkbox.winfo_manager():
             self.checkbox.pack_forget()
 
