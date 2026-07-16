@@ -1,8 +1,7 @@
-"""Operating-system integration for Daymark."""
-
 from daymark.platform_integration.desktop_host import (
     DesktopAttachResult,
     DesktopHost,
+    DisplayInfo,
     UnsupportedDesktopHost,
     create_desktop_host,
 )
@@ -10,6 +9,7 @@ from daymark.platform_integration.desktop_host import (
 __all__ = [
     "DesktopAttachResult",
     "DesktopHost",
+    "DisplayInfo",
     "UnsupportedDesktopHost",
     "create_desktop_host",
 ]
