@@ -1,98 +1,129 @@
 # AGENTS.md
 
-이 파일은 **툴에 무관한 영구 계약(permanent contract)** 레이어입니다. 특정 AI 도구(Claude
-Code, Cursor, Copilot 등)에 종속되지 않으며, 각 툴은 얇은 어댑터 파일(`CLAUDE.md` 등)에서
-이 문서를 참조하기만 합니다. 규칙이 바뀌면 **여기만** 고칩니다.
+이 문서는 Daymark에서 사람과 코딩 에이전트가 따라야 하는 영구 작업 계약이다. 코드, 이슈, PR 설명과 이 문서가 충돌하면 이 문서를 우선하며, 제품 범위를 바꾸는 작업은 먼저 이 문서를 수정해야 한다.
 
-## 1. 프로젝트 정체성
+## 1. Product Contract
 
-- **이름**: 업무 · 일정 관리 (work-schedule-board)
-- **한 줄**: 여러 목표·회사 업무·하루 업무량·컨디션을 같은 날짜 축에서 보는 웹앱.
-  로그인 없이 `localStorage`로 동작하고, 구글 로그인 시 Railway Postgres에 동기화.
-- **성격**: 개인 프로젝트. 유료화(auto-sync, 위젯 자동 새로고침)를 염두에 둔 free/paid 경계 존재.
-- **진실의 원천(source of truth)**: 편집은 **웹앱**이 담당. 위젯(데스크톱/모바일)은 같은 서버
-  데이터를 쓰는 얇은 read/quick-write 클라이언트. 위젯은 보드 계산 로직을 복제하지 않는다.
+Daymark의 목적은 다음 한 문장으로 고정한다.
 
-## 2. 아키텍처 불변식 (지켜야 할 것)
+> 달력의 날짜 셀에서 업무를 빠르게 적고 완료 체크한 기록을, 별도 정리 없이 업무보고로 변환한다.
 
-이 규칙들은 리팩터링·기능 추가 시에도 깨지면 안 된다.
+MVP의 사용자 흐름은 정확히 다음과 같다.
 
-1. **보드 계산 로직은 `core/`에만 존재한다.** `board-schema.js`(정규화)와
-   `board-metrics.js`(요약·컨디션 보간)는 프론트(`app.js`)·서버(`server.js`)·위젯(`widget.js`)이
-   **공유**한다. 같은 계산을 두 번 구현하지 않는다.
-2. **`core/` 모듈은 UMD 패턴을 유지한다.** 브라우저 전역과 CommonJS(`module.exports`)
-   양쪽에서 로드되므로, 이 이중 로딩을 깨는 import/export 문법을 도입하지 않는다.
-3. **모든 서버 진입점은 `normalizeBoard()`를 통과시킨다.** 로드·저장 양쪽에서 방어.
-4. **plan/feature 플래그의 진실의 원천은 서버다.** 프론트·위젯은 `/api/me`,
-   `/api/auth/google` 응답의 feature 플래그를 **읽기만** 한다. 클라이언트에서 권한을 판단하지 않는다.
-5. **동기화는 무조건 덮어쓰지 않는다.** 로컬·서버 중 `updatedAt`이 최신인 쪽을 채택하고,
-   저장 시 `baseUpdatedAt` 낙관적 잠금으로 충돌(409)을 감지한다. (→ ADR-0002)
-6. **정적 서빙은 백엔드/설정 파일을 노출하지 않는다.** `server.js`, `.env*`, `package*.json`
-   등은 차단 목록 + `dotfiles: "ignore"`로 이중 차단.
+1. 앱을 연다.
+2. 날짜 셀의 빈 행을 클릭한다.
+3. 한 업무를 입력하고 `Enter`를 누른다.
+4. 같은 날짜의 다음 빈 행으로 포커스가 이동한다.
+5. 업무를 끝내면 왼쪽 체크박스를 누른다.
+6. 일간·주간·월간 보고서를 생성하고 복사한다.
 
-## 3. 보안 규칙
+## 2. Scope Guard
 
-- **사용자 입력을 `innerHTML`에 넣을 때는 반드시 `escapeHtml()`를 거친다.** 목표명·노트·
-  마일스톤 노트·공휴일명 등 모든 지점. 새 렌더 코드도 동일.
-- **prod에서 `JWT_SECRET`이 없으면 기동 실패시킨다.** 취약한 기본값으로 조용히 뜨지 않는다.
-- **시크릿을 커밋하지 않는다.** `.env`는 gitignore됨. Railway는 서비스 Variables 사용.
-- DB 연결 SSL은 공개 프록시일 때만 켠다. internal URL(`.railway.internal`)이면 불필요.
+### 반드시 유지할 기능
 
-## 4. 코드 스타일
+- 월간 달력
+- 날짜별 인라인 한 줄 업무
+- `Enter`로 현재 업무 저장 및 다음 입력 행 생성
+- 각 업무 왼쪽 완료 체크박스
+- 로컬 SQLite 자동 저장
+- 어제 미완료 업무를 오늘로 이동
+- 일간·주간·월간 로컬 요약
+- OpenAI 호환 LLM 보고서 생성
+- API 키 비저장
 
-- 언어: Vanilla JS (프레임워크 없음). 프론트도 빌드 스텝 없이 `<script>` 직접 로드.
-- 주석·UI 문자열은 한국어. 변수/함수명은 영어.
-- 날짜 키는 항상 `YYYY-MM-DD` 문자열, 기준 시간대는 `Asia/Seoul`
-  (`getKoreaDateKey`). 서버가 UTC여도 이 함수를 거친다.
-- 공휴일은 `holidays/<연도>.js`에 `registerHolidays()`로 추가 (HTML 수정 불필요).
+### 명시적으로 제외할 기능
 
-## 5. 커밋 규칙
+다음 기능은 사용자가 별도로 제품 범위 변경을 승인하기 전까지 구현하지 않는다.
 
-한 줄 요약 뒤 본문에 **왜/무엇을 결정했는지**를 남긴다. 특히 비자명한 변경은 필수.
+- 로그인, 계정, 권한
+- 클라우드 동기화 및 서버
+- 팀 협업과 공유
+- 프로젝트, 태그, 우선순위, 담당자
+- 알림과 반복 일정
+- 간트 차트, 업무량·컨디션 그래프
+- 채팅형 AI 인터페이스
+- 모바일 앱
+- 외부 캘린더 연동
 
-```
-<요약: 무엇을 했는가 (명령형)>
+“나중에 필요할 수 있다”는 이유만으로 데이터 필드, 추상화 또는 의존성을 미리 추가하지 않는다.
 
-Why: <이 변경이 필요한 이유 — 어떤 문제/버그/요구를 해결하는가>
-Decision: <여러 선택지 중 이 방식을 택한 근거 (해당 시)>
-```
+## 3. UX Invariants
 
-- 설계 수준의 결정은 커밋 본문이 아니라 `docs/adr/`에 ADR로 남기고 커밋에서 참조한다.
-- Co-Authored-By 트레일러는 AI 도구가 실질 기여한 경우 유지.
+- 날짜 셀을 떠나는 모달 없이 업무 입력과 체크가 끝나야 한다.
+- 새 업무 입력에 필요한 클릭 수는 날짜 셀 클릭 한 번 이하로 유지한다.
+- 기존 업무에서 `Enter`를 누르면 저장 후 바로 아래 새 행에 포커스를 둔다.
+- 기존 업무 내용을 공백으로 만들면 해당 업무를 삭제한다.
+- 체크 상태 변경은 즉시 저장한다.
+- 완료 업무는 시각적으로 흐리게 표시하되 내용은 계속 읽을 수 있어야 한다.
+- AI 보고서는 입력 기록에 없는 사실을 만들어서는 안 된다.
+- API 키는 DB, JSON, 로그, Git에 기록하지 않는다.
 
-## 6. 검증 (변경 후 필수)
+## 4. Architecture Boundaries
 
-빌드 스텝이 없으므로 최소한 문법 검사는 항상 돌린다.
+의존 방향은 다음을 지킨다.
 
-```bash
-node --check app.js
-node --check server.js
-node --check widget.js
-node --check core/board-schema.js
-node --check core/board-metrics.js
+```text
+ui -> repository/services/models
+services -> models
+repository -> models
+models -> standard library only
 ```
 
-- `core/` 로직을 바꿨으면 순수 함수 단위로 격리 테스트를 작성해 확인한다
-  (프론트 전역 없이 재현 가능해야 한다 — 이것이 `core/` 분리의 목적).
-- 동기화·충돌 로직을 건드렸으면 최소 5개 시나리오를 검증한다:
-  로컬 최신 / 서버 최신 / 동률 / 레거시 로컬(updatedAt 없음) / 서버 시간 null.
+- `repository.py`만 SQLite SQL을 가진다.
+- `llm_client.py`만 외부 LLM HTTP 형식을 안다.
+- `report_service.py`는 GUI를 import하지 않는다.
+- UI 테스트를 가능하게 하기 위해 데이터 디렉터리는 생성자에서 주입할 수 있어야 한다.
+- MVP에서는 외부 런타임 의존성을 추가하지 않는다. Python 표준 라이브러리를 우선한다.
 
-## 7. 문서 지도
+## 5. Data Rules
 
-| 문서 | 역할 |
-|------|------|
-| `AGENTS.md` (이 파일) | 툴 무관 영구 계약. 규칙의 진실의 원천 |
-| `CLAUDE.md` | Claude Code용 얇은 어댑터 → 이 파일 참조 |
-| `README.md` | 사용자·운영자용 (실행·배포·기능) |
-| `docs/ARCHITECTURE.md` | 시스템 구조·데이터 흐름·모듈 경계 |
-| `docs/API.md` | HTTP 엔드포인트 계약 |
-| `docs/DATA_MODEL.md` | 보드 스키마·동기화·충돌 규칙 |
-| `docs/adr/` | 아키텍처 의사결정 기록(ADR) |
-| `docs/WIDGET_PLAN.md` | 위젯/데스크톱 확장 로드맵 |
+- 날짜는 `YYYY-MM-DD` 문자열로 저장한다.
+- 시간은 UTC ISO 8601로 저장한다.
+- 업무 순서는 날짜별 `sort_order` 0부터 연속된 정수로 유지한다.
+- 빈 업무는 저장하지 않는다.
+- 삭제 후 해당 날짜의 순서를 다시 연속으로 만든다.
+- 미완료 이동은 완료 업무를 원래 날짜에 남긴다.
+- 모든 DB 변경은 같은 사용자 동작 안에서 commit한다.
 
-## 8. 작업 시 태도
+## 6. LLM Safety and Privacy
 
-- 추측하지 말고 실제 코드를 확인한 뒤 바꾼다. 특히 엔드포인트 계약·스키마·동기화 흐름.
-- 위 불변식(2절)을 깨야만 하는 상황이면, 먼저 ADR로 결정을 남기고 이 문서를 갱신한 뒤 진행한다.
-- 과설계를 피한다. 예: 현재 동기화는 보드 단위 최신 선택이면 충분하다. 필드 단위 병합/CRDT는
-  auto-sync를 유료로 켤 때 다시 판단한다 (→ ADR-0002 "한계" 참조).
+- 사용자 업무 기록은 사용자가 `LLM으로 생성`을 누를 때만 외부 API로 보낸다.
+- 로컬 미리보기는 네트워크를 사용하지 않는다.
+- 시스템 프롬프트에는 허위 성과 생성 금지와 완료/미완료 구분을 포함한다.
+- 오류 메시지에 Authorization 헤더나 API 키를 포함하지 않는다.
+- API 키 저장 기능을 추가하지 않는다.
+
+## 7. Definition of Done
+
+변경은 아래 조건을 모두 만족해야 완료다.
+
+1. `python -m compileall src` 성공
+2. `python -m unittest discover -s tests -v` 성공
+3. Linux에서는 `xvfb-run -a python scripts/check.py` 성공
+4. 새 동작에 대한 테스트 추가 또는 기존 테스트가 충분한 이유 기록
+5. README와 관련 `docs/*.md`가 실제 동작과 일치
+6. 로그인·클라우드 동기화 등 Scope Guard 위반 없음
+7. 비밀키, 토큰, 개인 DB 파일이 commit되지 않음
+
+## 8. Change Procedure for Agents
+
+1. `AGENTS.md`와 관련 명세를 먼저 읽는다.
+2. 요구 사항을 기존 불변식과 비교한다.
+3. 데이터 모델 변경이 필요한지 판단한다.
+4. 실패하는 테스트를 먼저 추가하거나 검증 기준을 명시한다.
+5. 가장 작은 변경으로 구현한다.
+6. 전체 검사 스크립트를 실행한다.
+7. 코드와 문서를 함께 갱신한다.
+8. 커밋 메시지에 사용자 관점 결과를 적는다.
+
+## 9. Commit Convention
+
+```text
+feat: add weekly report generation
+fix: preserve task order after deletion
+test: cover incomplete task carry-over
+docs: clarify API key handling
+refactor: isolate report prompt builder
+```
+
+하나의 커밋에는 하나의 논리적 변경만 포함한다. 자동 생성된 DB, 캐시, 빌드 결과는 commit하지 않는다.

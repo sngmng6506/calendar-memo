@@ -1,90 +1,85 @@
-# 아키텍처
+# Architecture
 
-> 규칙·불변식은 [`../AGENTS.md`](../AGENTS.md)가 진실의 원천. 이 문서는 "지금 시스템이
-> 어떻게 생겼는가"를 설명한다.
-
-## 개요
-
-단일 Express 서비스가 정적 프론트(`index.html` 등)와 `/api/*`를 함께 서빙한다.
-Railway 단일 서비스로 배포. 데이터는 사용자당 한 행(JSONB)으로 Postgres `boards`에 저장.
-
-```mermaid
-flowchart LR
-  User[사용자] --> Web[웹앱 app.js]
-  Web --> Local[(localStorage)]
-  Web --> Api[/Express /api/*/]
-  Web --> Google[Google 로그인]
-  Google --> Api
-  Api --> Session[JWT 세션 쿠키]
-  Api --> Core[core/ 공유 로직]
-  Api --> DB[(Railway Postgres · boards JSONB)]
-  Widget[위젯 widget.js] --> Api
-  Web --> Holidays[holidays/*.js]
-```
-
-## 레이어와 책임
-
-| 레이어 | 파일 | 책임 |
-|--------|------|------|
-| 프론트(편집기) | `app.js`, `index.html`, `styles.css` | 타임라인·그래프 렌더, 목표/날짜/컨디션 편집, 로컬 저장, 동기화 오케스트레이션 |
-| 위젯(얇은 클라이언트) | `widget.js`, `widget.html`, `widget.css` | 서버 요약 데이터 read + 캘린더/wave 렌더. 계산 로직 없음 |
-| 서버 | `server.js` | 정적 서빙 + 인증(구글/JWT) + 보드 CRUD + 위젯 요약 API |
-| 공유 코어 | `core/board-schema.js`, `core/board-metrics.js` | 보드 정규화, 업무량·컨디션 계산·보간·예측. **프론트·서버·위젯 공유** |
-| 데이터 | `holidays/<연도>.js` | 연도별 공휴일. `<script>` 동적 로드(→ `file://`에서도 동작) |
-
-## 모듈 경계 (불변식)
-
-- **계산은 `core/`에만.** `app.js`/`server.js`/`widget.js`는 `core/`를 호출할 뿐 같은 계산을
-  재구현하지 않는다.
-- **`core/`는 UMD.** 브라우저 전역(`root.BoardSchema`, `root.BoardMetrics`)과
-  CommonJS(`module.exports`) 양쪽 로드. 이 이중성을 깨는 문법 금지.
-- **정규화는 서버 진입점에서.** 로드·저장 모두 `normalizeBoard()` 통과.
-
-## 데이터 흐름 — 편집 → 저장
+## Overview
 
 ```mermaid
 flowchart TD
-  Edit[사용자 편집] --> Save[saveState]
-  Save --> Cache[파생 캐시 무효화]
-  Save --> Stamp[state.updatedAt = now]
-  Save --> LS[(localStorage 저장)]
-  Save --> Sched[scheduleCloudSave]
-  Sched -->|autoSync 꺼짐/미로그인| Idle[대기]
-  Sched -->|autoSync 켜짐| Push[pushBoardToServer]
-  Push -->|baseUpdatedAt 동봉| Put[/PUT /api/board/]
+    UI[Tkinter UI] --> Repo[TaskRepository]
+    UI --> Report[ReportService]
+    UI --> LLM[OpenAICompatibleClient]
+    Repo --> SQLite[(SQLite)]
+    Report --> Models[Task / ReportPeriod]
+    LLM --> API[OpenAI-compatible API]
+    Settings[SettingsStore] --> JSON[(settings.json)]
+    Settings -. API key 제외 .-> UI
 ```
 
-## 데이터 흐름 — 로드/로그인 시 동기화
+## Rationale
 
-무조건 덮어쓰지 않고 로컬·서버 중 최신을 채택한다. (상세: [`DATA_MODEL.md`](./DATA_MODEL.md),
-근거: [`adr/0002-board-sync-optimistic-locking.md`](./adr/0002-board-sync-optimistic-locking.md))
+첫 버전은 가볍고 설치 의존성이 적어야 하므로 Python 표준 라이브러리만 사용한다.
+
+- Tkinter: 운영체제 데스크톱 창과 입력 위젯
+- sqlite3: 트랜잭션이 가능한 로컬 영구 저장
+- urllib: 외부 SDK 없이 OpenAI 호환 HTTP 요청
+- unittest: 별도 테스트 패키지 없이 검증
+
+## Module Responsibilities
+
+### `app.py`
+
+앱 창, 도구 모음, 월 이동, 날짜 셀 조립을 담당한다. SQL과 LLM 요청 형식은 알지 않는다.
+
+### `ui/day_cell.py`
+
+한 날짜의 업무 목록과 빈 입력 행을 렌더링한다. `Enter`, 체크, 삭제 이벤트를 저장소 작업으로 연결한다.
+
+### `repository.py`
+
+스키마 생성, 업무 CRUD, 정렬, 미완료 이동, 보고서 저장을 담당한다.
+
+### `services/report_service.py`
+
+기간의 업무를 근거가 보존된 LLM 프롬프트 또는 로컬 미리보기로 변환한다.
+
+### `services/llm_client.py`
+
+OpenAI 호환 `chat/completions` 요청과 응답 파싱만 담당한다.
+
+## Runtime Data Flow
 
 ```mermaid
 sequenceDiagram
-  participant B as 브라우저
-  participant A as Express API
-  participant P as Postgres
-  B->>A: GET /api/board
-  A->>P: 보드 + updated_at 조회
-  P-->>A: data(JSONB), updated_at
-  A-->>B: { board, updatedAt }
-  B->>B: reconcile(local.updatedAt vs updatedAt)
-  alt 서버가 최신
-    B->>B: applyServerBoard (로컬 덮어씀)
-  else 로컬이 최신/동률
-    B->>A: PUT /api/board { board, baseUpdatedAt }
-    A->>P: updated_at 비교
-    alt 충돌
-      A-->>B: 409 + 서버 최신본
-    else 정상
-      A->>P: upsert
-      A-->>B: { ok, updatedAt }
-    end
-  end
+    participant U as User
+    participant C as DayCell
+    participant R as Repository
+    participant D as SQLite
+
+    U->>C: 업무 입력 후 Enter
+    C->>R: add(date, content, after_id)
+    R->>D: INSERT + order update
+    D-->>R: commit
+    R-->>C: Task
+    C-->>U: 다음 빈 행 focus
 ```
 
-## 배포
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant UI as ReportDialog
+    participant RS as ReportService
+    participant L as LLM Client
+    participant API as External API
 
-- Railway 단일 서비스 + PostgreSQL. 앱의 `DATABASE_URL`을 `${{Postgres.DATABASE_URL}}`로 참조.
-- 필수 Variables: `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `NODE_ENV=production`.
-- 값이 없으면 동기화가 꺼지고 `localStorage` 전용으로 폴백. `JWT_SECRET`은 prod에서 필수(없으면 기동 실패).
+    U->>UI: LLM으로 생성
+    UI->>RS: build_prompt(period, tasks)
+    RS-->>UI: grounded prompt
+    UI->>L: generate(system, prompt)
+    L->>API: HTTPS POST
+    API-->>L: report text
+    L-->>UI: content
+    UI-->>U: editable report
+```
+
+## Security Boundary
+
+SQLite와 설정 JSON은 로컬이다. 업무 데이터는 사용자가 LLM 생성 버튼을 누른 경우에만 외부 API로 전송된다. API 키는 프로세스 환경변수에서 읽으며 파일에 쓰지 않는다.
