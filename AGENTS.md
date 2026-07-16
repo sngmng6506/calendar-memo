@@ -66,6 +66,9 @@ MVP의 사용자 흐름은 정확히 다음과 같다.
 - Windows 바탕화면 모드는 WorkerW를 우선하고 Progman을 폴백으로 사용한다.
 - 바탕화면 연결 실패나 Explorer 재시작이 업무 입력·SQLite 저장을 막아서는 안 된다.
 - 사용자는 우측 토글, `Ctrl+Shift+D`, `--window`로 항상 일반 창 모드에 복귀할 수 있어야 한다.
+- Windows 바탕화면 모드는 가상 데스크톱 전체가 아니라 선택한 모니터 한 대의 영역만 사용해야 한다.
+- 창/바탕화면 모드 전환과 Explorer 재연결 뒤에도 동일한 투명도 설정을 유지해야 한다.
+- 모니터와 투명도는 설정에서 변경 가능하고 API 키 없이 `settings.json`에 저장할 수 있어야 한다.
 - 시각적 구분은 색상 블록보다 정렬, 여백, 글자 명암을 우선한다.
 
 ## 4. Architecture Boundaries
@@ -118,7 +121,8 @@ models -> standard library only
 6. 로그인·클라우드 동기화 등 Scope Guard 위반 없음
 7. 비밀키, 토큰, 개인 DB 파일이 commit되지 않음
 8. WorkerW 연결 실패가 원래 부모·스타일로 롤백되는 테스트 통과
-9. Windows 실기기에서 확인하지 못한 동작은 검증 범위를 명시
+9. 선택 모니터 배치와 layered alpha 재적용 테스트 통과
+10. Windows 실기기에서 확인하지 못한 동작은 검증 범위를 명시
 
 ## 8. Change Procedure for Agents
 
