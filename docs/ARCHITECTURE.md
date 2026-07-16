@@ -38,12 +38,15 @@ Python 표준 라이브러리만 사용한다.
 
 ### `platform_integration/windows_desktop.py`
 
+Win32 모니터 열거, WorkerW/Progman 부모 탐색, 선택 모니터 상대 좌표 계산, `WS_EX_LAYERED` alpha 적용을 담당한다. WorkerW가 가상 데스크톱 전체 크기여도 Daymark 자식 창은 선택 모니터 영역에만 배치한다.
+
 - Progman 탐색과 WorkerW 생성 요청
 - `EnumWindows`와 `FindWindowExW`로 아이콘 호스트 뒤 WorkerW 탐색
 - Tk 최상위 HWND 해석
 - 원래 부모와 스타일 보존
 - `SetParent` 및 창 스타일 전환
-- 부모 클라이언트 크기에 맞춘 `SetWindowPos`
+- 선택 모니터 좌표를 WorkerW 부모 기준으로 변환한 `SetWindowPos`
+- `WS_EX_LAYERED`와 `SetLayeredWindowAttributes`로 alpha 재적용
 - Explorer 재시작 시 재연결
 - 부분 실패 시 원상 복구
 
@@ -78,13 +81,14 @@ sequenceDiagram
     participant E as Explorer
     participant W as WorkerW
 
-    A->>H: attach(Tk HWND)
+    A->>H: attach(Tk HWND, display index, opacity)
     H->>E: Progman 찾기 + WorkerW 생성 요청
     H->>E: top-level windows 열거
     E-->>H: DefView 뒤 WorkerW
     H->>H: 원래 parent/style 저장
     H->>W: SetParent + WS_CHILD
-    H->>W: client rect로 resize
+    H->>W: 선택 모니터 상대 좌표로 resize
+    H->>W: layered alpha 적용
     H-->>A: success / fallback reason
 ```
 
