@@ -9,7 +9,7 @@ from tkinter import messagebox, ttk
 from daymark.calendar_utils import WEEKDAY_LABELS, month_matrix, shift_month
 from daymark.platform_integration import DesktopAttachResult, DesktopHost, create_desktop_host
 from daymark.repository import TaskRepository
-from daymark.settings import SettingsStore
+from daymark.settings import SettingsStore, clamp_opacity
 from daymark.theme import (
     DEFAULT_WINDOW_OPACITY,
     MUTED_TEXT,
@@ -55,14 +55,18 @@ class DaymarkApp(tk.Tk):
         self.geometry("1280x820")
         self.minsize(920, 620)
         self.configure(background=WINDOW_BG)
-        self.window_opacity = resolve_window_opacity()
-        self._apply_window_effects()
 
         self.data_dir = data_dir or default_data_dir()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.repository = TaskRepository(self.data_dir / "daymark.db")
         self.settings_store = SettingsStore(self.data_dir / "settings.json")
         self.settings = self.settings_store.load()
+        opacity_override = os.environ.get("DAYMARK_OPACITY")
+        self.window_opacity = resolve_window_opacity(
+            opacity_override if opacity_override else str(self.settings.window_opacity)
+        )
+        self.settings.window_opacity = self.window_opacity
+        self._apply_window_effects()
         self.desktop_host = desktop_host or create_desktop_host()
         self.auto_desktop_mode = auto_desktop_mode
         self.desktop_mode_active = False
@@ -88,6 +92,16 @@ class DaymarkApp(tk.Tk):
         except tk.TclError:
             # 일부 Linux window manager는 alpha를 제공하지 않는다.
             pass
+
+    def _reapply_transparency(self) -> None:
+        # SetParent/overrideredirect 전환 직후 Windows가 layered 상태를 다시 계산하는
+        # 경우가 있어 즉시 + 지연 재적용한다. 네이티브 host도 같은 alpha를 적용한다.
+        self._apply_window_effects()
+        for delay in (50, 250):
+            try:
+                self.after(delay, self._apply_window_effects)
+            except tk.TclError:
+                break
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self)
@@ -233,7 +247,33 @@ class DaymarkApp(tk.Tk):
         self._present_dialog(ReportDialog(self, self.repository, self.settings, self.selected_date))
 
     def _open_settings(self) -> None:
-        self._present_dialog(SettingsDialog(self, self.settings, self.settings_store))
+        self._present_dialog(
+            SettingsDialog(
+                self,
+                self.settings,
+                self.settings_store,
+                displays=self.desktop_host.displays(),
+                on_saved=self._apply_saved_visual_settings,
+            )
+        )
+
+    def _apply_saved_visual_settings(self) -> None:
+        self.window_opacity = clamp_opacity(self.settings.window_opacity)
+        self._reapply_transparency()
+        if not self.desktop_mode_active:
+            return
+        result = self.desktop_host.maintain(
+            self.winfo_id(),
+            display_index=self.settings.desktop_display_index,
+            opacity=self.window_opacity,
+        )
+        if not result.success:
+            messagebox.showwarning("바탕화면 설정", result.message, parent=self)
+            return
+        if result.display_index != self.settings.desktop_display_index:
+            self.settings.desktop_display_index = result.display_index
+            self.settings_store.save(self.settings)
+        self._reapply_transparency()
 
     def _present_dialog(self, dialog: tk.Toplevel) -> None:
         if not self.desktop_mode_active:
@@ -272,7 +312,11 @@ class DaymarkApp(tk.Tk):
                 self.update_idletasks()
             except tk.TclError:
                 pass
-            result = self.desktop_host.attach(self.winfo_id())
+            result = self.desktop_host.attach(
+                self.winfo_id(),
+                display_index=self.settings.desktop_display_index,
+                opacity=self.window_opacity,
+            )
             if not result.success:
                 self._restore_normal_window_chrome()
                 self.desktop_mode_active = False
@@ -284,8 +328,10 @@ class DaymarkApp(tk.Tk):
                 return
             self.desktop_mode_active = True
             self.settings.desktop_mode = True
+            self.settings.desktop_display_index = result.display_index
             self.desktop_mode_label.set("창 모드")
             self.settings_store.save(self.settings)
+            self._reapply_transparency()
             self._schedule_desktop_maintenance()
             return
 
@@ -296,6 +342,7 @@ class DaymarkApp(tk.Tk):
         self.desktop_mode_label.set("바탕화면")
         self.settings_store.save(self.settings)
         self._restore_normal_window_chrome()
+        self._reapply_transparency()
         if notify and not result.success:
             messagebox.showwarning("창 모드", result.message, parent=self)
 
@@ -327,7 +374,11 @@ class DaymarkApp(tk.Tk):
         self.desktop_maintenance_job = None
         if not self.desktop_mode_active:
             return
-        result: DesktopAttachResult = self.desktop_host.maintain(self.winfo_id())
+        result: DesktopAttachResult = self.desktop_host.maintain(
+            self.winfo_id(),
+            display_index=self.settings.desktop_display_index,
+            opacity=self.window_opacity,
+        )
         if not result.success:
             self.desktop_mode_active = False
             self.settings.desktop_mode = False
@@ -335,6 +386,10 @@ class DaymarkApp(tk.Tk):
             self.settings_store.save(self.settings)
             self._restore_normal_window_chrome()
             return
+        if result.display_index != self.settings.desktop_display_index:
+            self.settings.desktop_display_index = result.display_index
+            self.settings_store.save(self.settings)
+        self._reapply_transparency()
         self._schedule_desktop_maintenance()
 
     def _close(self) -> None:
