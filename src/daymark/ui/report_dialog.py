@@ -175,7 +175,6 @@ class ReportDialog(tk.Toplevel):
             return
         period = self._period()
         tasks = self.repository.list_between(period.start_date, period.end_date)
-        prompt = self.report_service.build_prompt(period, tasks)
         self.status.set("AI가 보고서를 생성하고 있습니다…")
         self._generation_active = True
         self._set_busy(True)
@@ -187,7 +186,7 @@ class ReportDialog(tk.Toplevel):
                     model=self.settings.llm_model,
                     base_url=self.settings.llm_base_url,
                 )
-                result = client.generate(self.report_service.SYSTEM_PROMPT, prompt)
+                result = self.report_service.generate_ai(period, tasks, client)
             except LlmError as exc:
                 self._generation_queue.put(("error", period, str(exc)))
                 return
