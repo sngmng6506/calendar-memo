@@ -20,6 +20,7 @@ class Task:
     sort_order: int
     created_at: datetime
     updated_at: datetime
+    origin_task_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
