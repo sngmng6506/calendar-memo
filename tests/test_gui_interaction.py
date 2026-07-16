@@ -10,7 +10,7 @@ from daymark.ui.task_row import TaskRow
 
 class GuiInteractionTest(unittest.TestCase):
     def test_enter_persists_task_and_creates_next_row(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             target = date.today()
             cell = next(
@@ -37,7 +37,7 @@ class GuiInteractionTest(unittest.TestCase):
             app._close()
 
     def test_pressing_enter_on_existing_task_reuses_single_draft(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             cell = app.day_cells[date.today()]
             draft = next(
@@ -67,7 +67,7 @@ class GuiInteractionTest(unittest.TestCase):
             app._close()
 
     def test_focus_out_updates_without_adding_another_draft(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             target = date.today()
             cell = next(
