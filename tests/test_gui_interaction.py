@@ -11,7 +11,7 @@ from daymark.ui.task_row import TaskRow
 class GuiInteractionTest(unittest.TestCase):
     def test_enter_persists_task_and_creates_next_row(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            app = DaymarkApp(Path(directory))
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             target = date.today()
             cell = next(
                 widget
@@ -38,7 +38,7 @@ class GuiInteractionTest(unittest.TestCase):
 
     def test_focus_out_updates_without_adding_another_draft(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            app = DaymarkApp(Path(directory))
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             target = date.today()
             cell = next(
                 widget

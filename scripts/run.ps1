@@ -1,3 +1,3 @@
 $ErrorActionPreference = "Stop"
 $env:PYTHONPATH = Join-Path $PSScriptRoot "..\src"
-python -m daymark.main
+python -m daymark.main @args

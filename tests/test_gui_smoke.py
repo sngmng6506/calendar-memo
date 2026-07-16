@@ -12,7 +12,7 @@ from daymark.ui.settings_dialog import SettingsDialog
 class GuiSmokeTest(unittest.TestCase):
     def test_application_can_render_and_close(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            app = DaymarkApp(Path(directory))
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.update_idletasks()
             self.assertIn("Daymark", app.title())
             self.assertEqual(42, sum(1 for widget in app.calendar_frame.grid_slaves() if int(widget.grid_info()["row"]) > 0))
@@ -20,7 +20,7 @@ class GuiSmokeTest(unittest.TestCase):
 
     def test_dialogs_can_render_with_minimal_theme(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            app = DaymarkApp(Path(directory))
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             report = ReportDialog(app, app.repository, app.settings, date.today())
             settings = SettingsDialog(app, app.settings, app.settings_store)
             app.update_idletasks()

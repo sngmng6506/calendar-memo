@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_LLM_MODEL = "gpt-4.1-mini"
 
 
+def default_desktop_mode() -> bool:
+    return os.name == "nt"
+
+
 @dataclass(slots=True)
 class AppSettings:
     llm_base_url: str = DEFAULT_LLM_BASE_URL
     llm_model: str = DEFAULT_LLM_MODEL
+    desktop_mode: bool = field(default_factory=default_desktop_mode)
 
     @property
     def api_key(self) -> str:
@@ -31,6 +36,7 @@ class SettingsStore:
             return AppSettings(
                 llm_base_url=str(data.get("llm_base_url", DEFAULT_LLM_BASE_URL)),
                 llm_model=str(data.get("llm_model", DEFAULT_LLM_MODEL)),
+                desktop_mode=bool(data.get("desktop_mode", default_desktop_mode())),
             )
         except (OSError, ValueError, TypeError):
             return AppSettings()

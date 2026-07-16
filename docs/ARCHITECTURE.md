@@ -6,84 +6,96 @@
 flowchart TD
     UI[Tkinter UI] --> Repo[TaskRepository]
     UI --> Report[ReportService]
-    UI --> LLM[OpenAICompatibleClient]
+    UI --> Host[DesktopHost]
+    Host --> Win[WindowsDesktopHost / ctypes]
+    Win --> Shell[Explorer WorkerW or Progman]
     Repo --> SQLite[(SQLite)]
     Report --> Models[Task / ReportPeriod]
+    UI --> LLM[OpenAICompatibleClient]
     LLM --> API[OpenAI-compatible API]
     Settings[SettingsStore] --> JSON[(settings.json)]
-    Settings -. API key 제외 .-> UI
 ```
 
 ## Rationale
 
-첫 버전은 가볍고 설치 의존성이 적어야 하므로 Python 표준 라이브러리만 사용한다.
+Python 표준 라이브러리만 사용한다.
 
-- Tkinter: 운영체제 데스크톱 창과 입력 위젯
-- sqlite3: 트랜잭션이 가능한 로컬 영구 저장
-- urllib: 외부 SDK 없이 OpenAI 호환 HTTP 요청
-- unittest: 별도 테스트 패키지 없이 검증
+- Tkinter: UI와 입력
+- sqlite3: 로컬 저장
+- urllib: OpenAI 호환 HTTP
+- ctypes: Windows Shell 및 User32 연결
+- unittest: 테스트
 
 ## Module Responsibilities
 
 ### `app.py`
 
-앱 창, 도구 모음, 월 이동, 날짜 셀 조립을 담당한다. SQL과 LLM 요청 형식은 알지 않는다.
+월 달력과 모드 전환을 조립한다. Win32 함수를 직접 호출하지 않고 `DesktopHost`만 사용한다.
+
+### `platform_integration/desktop_host.py`
+
+운영체제 중립 인터페이스, 결과 객체, 비 Windows 안전 폴백을 제공한다.
+
+### `platform_integration/windows_desktop.py`
+
+- Progman 탐색과 WorkerW 생성 요청
+- `EnumWindows`와 `FindWindowExW`로 아이콘 호스트 뒤 WorkerW 탐색
+- Tk 최상위 HWND 해석
+- 원래 부모와 스타일 보존
+- `SetParent` 및 창 스타일 전환
+- 부모 클라이언트 크기에 맞춘 `SetWindowPos`
+- Explorer 재시작 시 재연결
+- 부분 실패 시 원상 복구
+
+WorkerW 생성 메시지는 공개 Win32 계약이 아니므로 이 모듈 밖에서는 WorkerW 존재를 가정하지 않는다.
 
 ### `theme.py`
 
-반투명 창의 기본 불투명도, 배경·글자·강조 색상과 평면 버튼 옵션을 한 곳에서 관리한다. 데이터나 업무 규칙은 포함하지 않는다.
+반투명도, 색상, 평면 위젯 옵션을 관리한다.
 
 ### `ui/day_cell.py`
 
-한 날짜의 업무 목록과 빈 입력 행을 렌더링한다. `Enter`, 체크, 삭제 이벤트를 저장소 작업으로 연결한다.
+한 날짜의 업무 목록과 빈 입력 행을 렌더링한다.
 
 ### `repository.py`
 
-스키마 생성, 업무 CRUD, 정렬, 미완료 이동, 보고서 저장을 담당한다.
+SQLite 스키마, CRUD, 정렬, 미완료 이동, 보고서 저장을 담당한다.
 
 ### `services/report_service.py`
 
-기간의 업무를 근거가 보존된 LLM 프롬프트 또는 로컬 미리보기로 변환한다.
+업무 기록을 근거가 보존된 프롬프트 또는 로컬 요약으로 변환한다.
 
 ### `services/llm_client.py`
 
-OpenAI 호환 `chat/completions` 요청과 응답 파싱만 담당한다.
+OpenAI 호환 요청과 응답 파싱만 담당한다.
 
-## Runtime Data Flow
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant C as DayCell
-    participant R as Repository
-    participant D as SQLite
-
-    U->>C: 업무 입력 후 Enter
-    C->>R: add(date, content, after_id)
-    R->>D: INSERT + order update
-    D-->>R: commit
-    R-->>C: Task
-    C-->>U: 다음 빈 행 focus
-```
+## Desktop Mode Sequence
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant UI as ReportDialog
-    participant RS as ReportService
-    participant L as LLM Client
-    participant API as External API
+    participant A as DaymarkApp
+    participant H as WindowsDesktopHost
+    participant E as Explorer
+    participant W as WorkerW
 
-    U->>UI: LLM으로 생성
-    UI->>RS: build_prompt(period, tasks)
-    RS-->>UI: grounded prompt
-    UI->>L: generate(system, prompt)
-    L->>API: HTTPS POST
-    API-->>L: report text
-    L-->>UI: content
-    UI-->>U: editable report
+    A->>H: attach(Tk HWND)
+    H->>E: Progman 찾기 + WorkerW 생성 요청
+    H->>E: top-level windows 열거
+    E-->>H: DefView 뒤 WorkerW
+    H->>H: 원래 parent/style 저장
+    H->>W: SetParent + WS_CHILD
+    H->>W: client rect로 resize
+    H-->>A: success / fallback reason
 ```
+
+## Failure Boundaries
+
+- WorkerW 탐색 실패: 일반 창 유지
+- `SetParent` 이후 크기 조정 실패: 원래 부모와 스타일로 롤백
+- Explorer 재시작: 2.5초 주기 유지 검사에서 새 부모 탐색
+- LLM 또는 네트워크 실패: SQLite와 입력 UI는 계속 동작
+- 앱 종료: 가능한 경우 먼저 원래 부모로 분리한 뒤 DB를 닫음
 
 ## Security Boundary
 
-SQLite와 설정 JSON은 로컬이다. 업무 데이터는 사용자가 LLM 생성 버튼을 누른 경우에만 외부 API로 전송된다. API 키는 프로세스 환경변수에서 읽으며 파일에 쓰지 않는다.
+업무 데이터는 사용자가 LLM 생성 버튼을 누른 경우에만 외부로 전송된다. API 키는 환경변수에서 읽으며 파일에 쓰지 않는다. Win32 통합은 로컬 창 핸들과 스타일만 다루고 업무 내용에는 접근하지 않는다.

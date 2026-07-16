@@ -30,6 +30,7 @@ MVP의 사용자 흐름은 정확히 다음과 같다.
 - 일간·주간·월간 로컬 요약
 - OpenAI 호환 LLM 보고서 생성
 - API 키 비저장
+- Windows 바탕화면 WorkerW 모드와 일반 창 폴백
 
 ### 명시적으로 제외할 기능
 
@@ -62,6 +63,9 @@ MVP의 사용자 흐름은 정확히 다음과 같다.
 - 빈 날짜마다 보이는 입력 상자나 체크박스를 렌더링하지 않는다.
 - 저장된 업무만 평면형 `□ / ✓` 체크 컨트롤을 표시한다.
 - 메인 창은 기본 반투명 표면을 유지하되, 미지원 환경에서는 불투명 폴백을 허용한다.
+- Windows 바탕화면 모드는 WorkerW를 우선하고 Progman을 폴백으로 사용한다.
+- 바탕화면 연결 실패나 Explorer 재시작이 업무 입력·SQLite 저장을 막아서는 안 된다.
+- 사용자는 우측 토글, `Ctrl+Shift+D`, `--window`로 항상 일반 창 모드에 복귀할 수 있어야 한다.
 - 시각적 구분은 색상 블록보다 정렬, 여백, 글자 명암을 우선한다.
 
 ## 4. Architecture Boundaries
@@ -72,12 +76,15 @@ MVP의 사용자 흐름은 정확히 다음과 같다.
 ui -> repository/services/models
 services -> models
 repository -> models
+platform_integration -> standard library / Win32 ctypes
 models -> standard library only
 ```
 
 - `repository.py`만 SQLite SQL을 가진다.
 - `llm_client.py`만 외부 LLM HTTP 형식을 안다.
 - `report_service.py`는 GUI를 import하지 않는다.
+- `windows_desktop.py`만 WorkerW 탐색, SetParent, Win32 스타일 변경을 안다.
+- `app.py`는 Win32 함수가 아니라 `DesktopHost` 인터페이스만 사용한다.
 - UI 테스트를 가능하게 하기 위해 데이터 디렉터리는 생성자에서 주입할 수 있어야 한다.
 - MVP에서는 외부 런타임 의존성을 추가하지 않는다. Python 표준 라이브러리를 우선한다.
 
@@ -110,6 +117,8 @@ models -> standard library only
 5. README와 관련 `docs/*.md`가 실제 동작과 일치
 6. 로그인·클라우드 동기화 등 Scope Guard 위반 없음
 7. 비밀키, 토큰, 개인 DB 파일이 commit되지 않음
+8. WorkerW 연결 실패가 원래 부모·스타일로 롤백되는 테스트 통과
+9. Windows 실기기에서 확인하지 못한 동작은 검증 범위를 명시
 
 ## 8. Change Procedure for Agents
 

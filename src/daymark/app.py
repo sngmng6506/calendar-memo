@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from daymark.calendar_utils import WEEKDAY_LABELS, month_matrix, shift_month
+from daymark.platform_integration import DesktopAttachResult, DesktopHost, create_desktop_host
 from daymark.repository import TaskRepository
 from daymark.settings import SettingsStore
 from daymark.theme import (
@@ -42,7 +43,13 @@ def resolve_window_opacity(value: str | None = None) -> float:
 
 
 class DaymarkApp(tk.Tk):
-    def __init__(self, data_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        data_dir: Path | None = None,
+        *,
+        desktop_host: DesktopHost | None = None,
+        auto_desktop_mode: bool = True,
+    ) -> None:
         super().__init__()
         self.title(f"{APP_NAME} — 업무 캘린더")
         self.geometry("1280x820")
@@ -56,6 +63,12 @@ class DaymarkApp(tk.Tk):
         self.repository = TaskRepository(self.data_dir / "daymark.db")
         self.settings_store = SettingsStore(self.data_dir / "settings.json")
         self.settings = self.settings_store.load()
+        self.desktop_host = desktop_host or create_desktop_host()
+        self.auto_desktop_mode = auto_desktop_mode
+        self.desktop_mode_active = False
+        self.desktop_mode_label = tk.StringVar(value="바탕화면")
+        self.desktop_maintenance_job: str | None = None
+        self.normal_geometry = "1280x820"
         self.current = date.today().replace(day=1)
         self.selected_date = date.today()
         self.month_title = tk.StringVar()
@@ -64,6 +77,10 @@ class DaymarkApp(tk.Tk):
         self._build_shell()
         self.render_month()
         self.protocol("WM_DELETE_WINDOW", self._close)
+        self.bind_all("<Control-Shift-d>", self._toggle_desktop_mode_event)
+        self.bind_all("<Control-Shift-D>", self._toggle_desktop_mode_event)
+        if self.auto_desktop_mode and self.settings.desktop_mode and self.desktop_host.supported:
+            self.after_idle(lambda: self._set_desktop_mode(True, notify=False))
 
     def _apply_window_effects(self) -> None:
         try:
@@ -85,13 +102,18 @@ class DaymarkApp(tk.Tk):
     def _text_button(
         self,
         master: tk.Misc,
-        text: str,
+        text: str | None,
         command: object,
         *,
         compact: bool = False,
         font: tuple[str, int, str] | tuple[str, int] | None = None,
+        textvariable: tk.StringVar | None = None,
     ) -> tk.Button:
-        button = tk.Button(master, text=text, command=command, **flat_button_options(compact=compact))
+        options = flat_button_options(compact=compact)
+        if textvariable is None:
+            button = tk.Button(master, text=text or "", command=command, **options)
+        else:
+            button = tk.Button(master, textvariable=textvariable, command=command, **options)
         if font is not None:
             button.configure(font=font)
         return button
@@ -134,6 +156,14 @@ class DaymarkApp(tk.Tk):
         self._text_button(actions, "미완료 이동", self._carry_over, compact=True).pack(side="left")
         self._text_button(actions, "AI 요약", self._open_report, compact=True).pack(side="left", padx=2)
         self._text_button(actions, "설정", self._open_settings, compact=True).pack(side="left")
+        if self.desktop_host.supported:
+            self._text_button(
+                actions,
+                None,
+                self._toggle_desktop_mode,
+                compact=True,
+                textvariable=self.desktop_mode_label,
+            ).pack(side="left", padx=(5, 0))
 
         self.calendar_frame = tk.Frame(self, background=WINDOW_BG, padx=16, pady=4)
         self.calendar_frame.pack(fill="both", expand=True)
@@ -200,11 +230,116 @@ class DaymarkApp(tk.Tk):
         messagebox.showinfo("미완료 업무 이동", f"{moved}건을 오늘로 이동했습니다.", parent=self)
 
     def _open_report(self) -> None:
-        ReportDialog(self, self.repository, self.settings, self.selected_date)
+        self._present_dialog(ReportDialog(self, self.repository, self.settings, self.selected_date))
 
     def _open_settings(self) -> None:
-        SettingsDialog(self, self.settings, self.settings_store)
+        self._present_dialog(SettingsDialog(self, self.settings, self.settings_store))
+
+    def _present_dialog(self, dialog: tk.Toplevel) -> None:
+        if not self.desktop_mode_active:
+            return
+        # WorkerW의 자식 창에서 연 대화상자가 바탕화면 아래로 내려가지 않도록
+        # 최초 표시 순간에만 앞으로 올린 뒤 일반 Z-order로 되돌린다.
+        try:
+            dialog.attributes("-topmost", True)
+            dialog.after(150, lambda: dialog.attributes("-topmost", False))
+            dialog.lift()
+            dialog.focus_force()
+        except tk.TclError:
+            pass
+
+    def _toggle_desktop_mode_event(self, event: tk.Event[tk.Misc]) -> str:
+        del event
+        self._toggle_desktop_mode()
+        return "break"
+
+    def _toggle_desktop_mode(self) -> None:
+        self._set_desktop_mode(not self.desktop_mode_active, notify=True)
+
+    def _set_desktop_mode(self, enabled: bool, *, notify: bool) -> None:
+        if enabled:
+            if not self.desktop_host.supported:
+                if notify:
+                    messagebox.showinfo(
+                        "바탕화면 모드",
+                        "Windows에서만 바탕화면 레이어에 고정할 수 있습니다.",
+                        parent=self,
+                    )
+                return
+            self.normal_geometry = self.geometry()
+            try:
+                self.overrideredirect(True)
+                self.update_idletasks()
+            except tk.TclError:
+                pass
+            result = self.desktop_host.attach(self.winfo_id())
+            if not result.success:
+                self._restore_normal_window_chrome()
+                self.desktop_mode_active = False
+                self.settings.desktop_mode = False
+                self.desktop_mode_label.set("바탕화면")
+                self.settings_store.save(self.settings)
+                if notify:
+                    messagebox.showwarning("바탕화면 모드", result.message, parent=self)
+                return
+            self.desktop_mode_active = True
+            self.settings.desktop_mode = True
+            self.desktop_mode_label.set("창 모드")
+            self.settings_store.save(self.settings)
+            self._schedule_desktop_maintenance()
+            return
+
+        self._cancel_desktop_maintenance()
+        result = self.desktop_host.detach()
+        self.desktop_mode_active = False
+        self.settings.desktop_mode = False
+        self.desktop_mode_label.set("바탕화면")
+        self.settings_store.save(self.settings)
+        self._restore_normal_window_chrome()
+        if notify and not result.success:
+            messagebox.showwarning("창 모드", result.message, parent=self)
+
+    def _restore_normal_window_chrome(self) -> None:
+        try:
+            self.overrideredirect(False)
+            self.update_idletasks()
+            self.geometry(self.normal_geometry)
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+        except tk.TclError:
+            pass
+
+    def _schedule_desktop_maintenance(self) -> None:
+        self._cancel_desktop_maintenance()
+        self.desktop_maintenance_job = self.after(2500, self._maintain_desktop_mode)
+
+    def _cancel_desktop_maintenance(self) -> None:
+        if self.desktop_maintenance_job is None:
+            return
+        try:
+            self.after_cancel(self.desktop_maintenance_job)
+        except tk.TclError:
+            pass
+        self.desktop_maintenance_job = None
+
+    def _maintain_desktop_mode(self) -> None:
+        self.desktop_maintenance_job = None
+        if not self.desktop_mode_active:
+            return
+        result: DesktopAttachResult = self.desktop_host.maintain(self.winfo_id())
+        if not result.success:
+            self.desktop_mode_active = False
+            self.settings.desktop_mode = False
+            self.desktop_mode_label.set("바탕화면")
+            self.settings_store.save(self.settings)
+            self._restore_normal_window_chrome()
+            return
+        self._schedule_desktop_maintenance()
 
     def _close(self) -> None:
+        self._cancel_desktop_maintenance()
+        if self.desktop_mode_active:
+            self.desktop_host.detach()
         self.repository.close()
         self.destroy()

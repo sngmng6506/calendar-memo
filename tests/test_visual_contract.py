@@ -19,7 +19,7 @@ class VisualContractTest(unittest.TestCase):
 
     def test_navigation_is_centered_and_calendar_has_no_card_borders(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            app = DaymarkApp(Path(directory))
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.update_idletasks()
             self.assertEqual("0.5", app.nav_frame.place_info()["relx"])
             cell = next(widget for widget in app.calendar_frame.grid_slaves() if isinstance(widget, DayCell))
@@ -39,7 +39,7 @@ class VisualContractTest(unittest.TestCase):
 
     def test_saved_task_reveals_flat_checkbox(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            app = DaymarkApp(Path(directory))
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             target = date.today()
             cell = next(
                 widget

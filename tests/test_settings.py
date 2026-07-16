@@ -18,10 +18,11 @@ class SettingsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "settings.json"
             store = SettingsStore(path)
-            store.save(AppSettings(llm_model="test-model"))
+            store.save(AppSettings(llm_model="test-model", desktop_mode=False))
             content = path.read_text(encoding="utf-8")
             self.assertIn("test-model", content)
             self.assertNotIn("api_key", content)
+            self.assertIn('"desktop_mode": false', content)
 
 
 if __name__ == "__main__":
