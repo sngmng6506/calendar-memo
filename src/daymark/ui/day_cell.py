@@ -4,9 +4,10 @@ import tkinter as tk
 from collections.abc import Callable
 from datetime import date
 
+from daymark.holiday_calendar import HolidayCalendar
 from daymark.models import Task
 from daymark.repository import TaskRepository
-from daymark.theme import ACCENT, MUTED_TEXT, TEXT, WINDOW_BG
+from daymark.theme import ACCENT, HOLIDAY_RED, MUTED_TEXT, SATURDAY_BLUE, TEXT, WINDOW_BG
 from daymark.ui.task_row import TaskRow
 
 
@@ -17,6 +18,7 @@ class DayCell(tk.Frame):
         task_date: date,
         current_month: int,
         repository: TaskRepository,
+        holiday_calendar: HolidayCalendar,
         on_changed: Callable[[], None],
         on_selected: Callable[[date], None],
     ) -> None:
@@ -30,14 +32,20 @@ class DayCell(tk.Frame):
         )
         self.task_date = task_date
         self.repository = repository
+        self.holiday_calendar = holiday_calendar
         self.on_changed = on_changed
         self.on_selected = on_selected
         self.rows_frame = tk.Frame(self, background=WINDOW_BG, borderwidth=0, highlightthickness=0)
         muted = task_date.month != current_month
         foreground = MUTED_TEXT if muted else TEXT
+        if task_date.weekday() == 5:
+            foreground = SATURDAY_BLUE
+        if task_date.weekday() == 6 or self.holiday_calendar.is_holiday(task_date):
+            foreground = HOLIDAY_RED
         font = ("TkDefaultFont", 9, "normal")
         if task_date == date.today():
-            foreground = ACCENT
+            if task_date.weekday() < 5 and not self.holiday_calendar.is_holiday(task_date):
+                foreground = ACCENT
             font = ("TkDefaultFont", 10, "bold")
         self.header = tk.Label(
             self,
