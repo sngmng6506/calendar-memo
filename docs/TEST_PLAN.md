@@ -54,3 +54,13 @@ PYTHONPATH=src xvfb-run -a python scripts/check.py
 - 명세와 실제 동작 일치
 - API 키, DB, 캐시 미포함
 - Windows에서 확인하지 못한 항목을 완료로 과장하지 않음
+
+## Multi-monitor / Transparency Contract
+
+- 두 개 이상의 가짜 모니터에서 선택 인덱스의 좌표·해상도만 사용
+- 유효하지 않은 모니터 인덱스는 주 모니터로 폴백
+- attach와 maintain 모두 동일 opacity를 Win32 layered alpha에 전달
+- 설정 변경 시 활성 바탕화면 위치와 투명도를 즉시 갱신
+- settings.json에 모니터·투명도는 저장하되 API 키는 저장하지 않음
+
+실제 Windows에서는 서로 다른 배율(DPI)의 듀얼 모니터, 좌측에 음수 좌표를 가진 모니터, Explorer 재시작 후 위치·투명도 유지 여부를 수동 확인한다.
