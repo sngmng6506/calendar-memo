@@ -14,6 +14,7 @@ class DisplayInfo:
     width: int
     height: int
     primary: bool = False
+    native_handle: int = 0
 
     @property
     def label(self) -> str:
@@ -37,6 +38,8 @@ class DesktopHost(Protocol):
     def attached(self) -> bool: ...
 
     def displays(self) -> list[DisplayInfo]: ...
+
+    def current_display_index(self, tk_window_id: int) -> int | None: ...
 
     def attach(
         self,
@@ -68,6 +71,10 @@ class UnsupportedDesktopHost:
 
     def displays(self) -> list[DisplayInfo]:
         return []
+
+    def current_display_index(self, tk_window_id: int) -> int | None:
+        del tk_window_id
+        return None
 
     def attach(
         self,
