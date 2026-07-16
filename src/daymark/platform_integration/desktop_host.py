@@ -6,10 +6,27 @@ from typing import Protocol
 
 
 @dataclass(frozen=True, slots=True)
+class DisplayInfo:
+    index: int
+    name: str
+    left: int
+    top: int
+    width: int
+    height: int
+    primary: bool = False
+
+    @property
+    def label(self) -> str:
+        primary = " · 주 모니터" if self.primary else ""
+        return f"{self.index + 1}번 모니터 · {self.width}×{self.height}{primary}"
+
+
+@dataclass(frozen=True, slots=True)
 class DesktopAttachResult:
     success: bool
     backend: str = "window"
     message: str = ""
+    display_index: int = 0
 
 
 class DesktopHost(Protocol):
@@ -19,11 +36,25 @@ class DesktopHost(Protocol):
     @property
     def attached(self) -> bool: ...
 
-    def attach(self, tk_window_id: int) -> DesktopAttachResult: ...
+    def displays(self) -> list[DisplayInfo]: ...
+
+    def attach(
+        self,
+        tk_window_id: int,
+        *,
+        display_index: int = 0,
+        opacity: float = 1.0,
+    ) -> DesktopAttachResult: ...
 
     def detach(self) -> DesktopAttachResult: ...
 
-    def maintain(self, tk_window_id: int) -> DesktopAttachResult: ...
+    def maintain(
+        self,
+        tk_window_id: int,
+        *,
+        display_index: int = 0,
+        opacity: float = 1.0,
+    ) -> DesktopAttachResult: ...
 
 
 class UnsupportedDesktopHost:
@@ -35,15 +66,30 @@ class UnsupportedDesktopHost:
     def attached(self) -> bool:
         return False
 
-    def attach(self, tk_window_id: int) -> DesktopAttachResult:
-        del tk_window_id
+    def displays(self) -> list[DisplayInfo]:
+        return []
+
+    def attach(
+        self,
+        tk_window_id: int,
+        *,
+        display_index: int = 0,
+        opacity: float = 1.0,
+    ) -> DesktopAttachResult:
+        del tk_window_id, display_index, opacity
         return DesktopAttachResult(False, message="Windows에서만 바탕화면 모드를 사용할 수 있습니다.")
 
     def detach(self) -> DesktopAttachResult:
         return DesktopAttachResult(True, message="일반 창 모드입니다.")
 
-    def maintain(self, tk_window_id: int) -> DesktopAttachResult:
-        del tk_window_id
+    def maintain(
+        self,
+        tk_window_id: int,
+        *,
+        display_index: int = 0,
+        opacity: float = 1.0,
+    ) -> DesktopAttachResult:
+        del tk_window_id, display_index, opacity
         return DesktopAttachResult(True, message="일반 창 모드입니다.")
 
 
