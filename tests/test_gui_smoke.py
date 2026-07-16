@@ -17,7 +17,7 @@ from daymark.ui.settings_dialog import SettingsDialog
 
 class GuiSmokeTest(unittest.TestCase):
     def test_application_can_render_and_close(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.update_idletasks()
             self.assertIn("Daymark", app.title())
@@ -32,7 +32,7 @@ class GuiSmokeTest(unittest.TestCase):
             app._close()
 
     def test_dialogs_can_render_with_minimal_theme(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             report = ReportDialog(app, app.repository, app.settings, date.today())
             settings = SettingsDialog(app, app.settings, app.settings_store)
@@ -45,7 +45,7 @@ class GuiSmokeTest(unittest.TestCase):
             app._close()
 
     def test_report_busy_state_disables_primary_controls(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             report = ReportDialog(app, app.repository, app.settings, date.today())
             report._set_busy(True)
@@ -59,7 +59,7 @@ class GuiSmokeTest(unittest.TestCase):
             app._close()
 
     def test_settings_opacity_slider_previews_and_cancel_restores(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             previews: list[float] = []
             dialog = SettingsDialog(
@@ -77,7 +77,7 @@ class GuiSmokeTest(unittest.TestCase):
             app._close()
 
     def test_unexpected_ai_error_restores_controls(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, patch.dict(
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory, patch.dict(
             os.environ, {"OPENAI_API_KEY": "test"}
         ), patch.object(
             OpenAICompatibleClient, "generate", side_effect=ValueError("bad endpoint")
@@ -101,7 +101,7 @@ class GuiSmokeTest(unittest.TestCase):
         previous_hook = threading.excepthook
         threading.excepthook = lambda args: thread_errors.append(args.exc_value)
         try:
-            with tempfile.TemporaryDirectory() as directory, patch.dict(
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory, patch.dict(
                 os.environ, {"OPENAI_API_KEY": "test"}
             ), patch.object(
                 OpenAICompatibleClient,
