@@ -17,7 +17,6 @@ from daymark.theme import (
     SATURDAY_BLUE,
     SATURDAY_HEADER,
     SELECTED_BG,
-    WINDOW_BG,
 )
 from daymark.ui.day_cell import DayCell
 from daymark.ui.more_menu import MoreMenuPopover
@@ -34,7 +33,7 @@ class VisualContractTest(unittest.TestCase):
         self.assertEqual(resolve_window_opacity(""), resolve_window_opacity("invalid"))
 
     def test_navigation_is_centered_and_calendar_has_no_card_borders(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.update_idletasks()
             self.assertEqual("0.5", app.nav_frame.place_info()["relx"])
@@ -55,7 +54,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_toolbar_exposes_only_ai_and_more_as_right_actions(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             buttons = [
                 child
@@ -73,7 +72,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_more_menu_opens_non_modal_and_closes_on_escape(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app._show_more_menu()
             app.update_idletasks()
@@ -86,7 +85,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_selected_date_uses_subtle_surface_and_today_badge(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             today = date.today()
             today_cell = app.day_cells[today]
@@ -95,12 +94,12 @@ class VisualContractTest(unittest.TestCase):
             self.assertEqual("bold", today_cell.header.font[2])
             other = next(day for day in app.day_cells if day != today)
             app._select_date(other)
-            self.assertEqual(WINDOW_BG, today_cell.cget("background"))
+            self.assertEqual(app.surface_bg, today_cell.cget("background"))
             self.assertEqual(SELECTED_BG, app.day_cells[other].cget("background"))
             app._close()
 
     def test_weekends_and_korean_holidays_use_subdued_calendar_colors(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.current = date(2026, 7, 1)
             app.selected_date = date(2026, 7, 1)
@@ -124,7 +123,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_saved_task_reveals_24px_round_check_control_without_green(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             cell = app.day_cells[date.today()]
             draft = next(
@@ -144,7 +143,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_six_week_grid_renders_outside_month_dates_with_regular_date_font(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.current = date(2026, 8, 1)
             app.selected_date = date(2026, 8, 1)
@@ -158,7 +157,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_long_day_list_reveals_scrollbar(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             target = date.today()
             for index in range(24):
@@ -171,7 +170,7 @@ class VisualContractTest(unittest.TestCase):
             app._close()
 
     def test_carry_over_updates_non_blocking_toast_without_messagebox(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, patch("tkinter.messagebox.askyesno") as ask:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory, patch("tkinter.messagebox.askyesno") as ask:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)
             app.repository.add(date.today() - timedelta(days=1), "이전 업무")
             app._carry_over()
