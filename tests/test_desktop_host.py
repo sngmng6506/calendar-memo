@@ -30,6 +30,7 @@ class FakeWindowsApi:
         self.refresh_calls: list[int] = []
         self.show_calls: list[int] = []
         self.fail_position = False
+        self.window_display_index = 1
 
     def root_window(self, tk_window_id: int) -> int:
         self.last_tk_window_id = tk_window_id
@@ -40,6 +41,10 @@ class FakeWindowsApi:
 
     def displays(self) -> list[DisplayInfo]:
         return list(self.monitors)
+
+    def display_index_for_window(self, tk_window_id: int) -> int | None:
+        self.last_display_lookup_window = tk_window_id
+        return self.window_display_index
 
     def is_window(self, hwnd: int) -> bool:
         return hwnd in self.valid
@@ -78,14 +83,18 @@ class FakeWindowsApi:
 
 
 class WindowsDesktopHostTest(unittest.TestCase):
+    def test_current_display_comes_from_window_location(self) -> None:
+        api = FakeWindowsApi()
+        host = WindowsDesktopHost(api)
+        self.assertEqual(1, host.current_display_index(77))
+        self.assertEqual(77, api.last_display_lookup_window)
+
     def test_attach_uses_only_selected_monitor_and_restores_on_detach(self) -> None:
         api = FakeWindowsApi()
         original_style = api.styles[100]
         original_ex_style = api.ex_styles[100]
         host = WindowsDesktopHost(api)
-
         result = host.attach(77, display_index=1, opacity=0.72)
-
         self.assertTrue(result.success)
         self.assertEqual("WorkerW", result.backend)
         self.assertEqual(1, result.display_index)
@@ -98,9 +107,7 @@ class WindowsDesktopHostTest(unittest.TestCase):
         self.assertTrue(api.ex_styles[100] & _WS_EX_LAYERED)
         self.assertEqual((100, 200, api.monitors[1]), api.position_calls[-1])
         self.assertEqual((100, 0.72), api.opacity_calls[-1])
-
         detached = host.detach()
-
         self.assertTrue(detached.success)
         self.assertFalse(host.attached)
         self.assertEqual(0, api.parents[100])
@@ -110,9 +117,7 @@ class WindowsDesktopHostTest(unittest.TestCase):
     def test_invalid_monitor_index_falls_back_to_primary(self) -> None:
         api = FakeWindowsApi()
         host = WindowsDesktopHost(api)
-
         result = host.attach(77, display_index=99, opacity=0.86)
-
         self.assertTrue(result.success)
         self.assertEqual(0, result.display_index)
         self.assertEqual(api.monitors[0], api.position_calls[-1][2])
@@ -121,9 +126,7 @@ class WindowsDesktopHostTest(unittest.TestCase):
         api = FakeWindowsApi()
         host = WindowsDesktopHost(api)
         self.assertTrue(host.attach(77).success)
-
         result = host.maintain(77, display_index=1, opacity=0.61)
-
         self.assertTrue(result.success)
         self.assertEqual(1, result.display_index)
         self.assertEqual(api.monitors[1], api.position_calls[-1][2])
@@ -133,13 +136,10 @@ class WindowsDesktopHostTest(unittest.TestCase):
         api = FakeWindowsApi()
         host = WindowsDesktopHost(api)
         self.assertTrue(host.attach(77, display_index=1, opacity=0.75).success)
-
         api.valid.remove(200)
         api.desktop_parent = 300
         api.valid.add(300)
-
         result = host.maintain(77, display_index=1, opacity=0.75)
-
         self.assertTrue(result.success)
         self.assertEqual(300, api.parents[100])
         self.assertEqual((100, 300, api.monitors[1]), api.position_calls[-1])
@@ -150,9 +150,7 @@ class WindowsDesktopHostTest(unittest.TestCase):
         original_ex_style = api.ex_styles[100]
         api.fail_position = True
         host = WindowsDesktopHost(api)
-
         result = host.attach(77)
-
         self.assertFalse(result.success)
         self.assertEqual(0, api.parents[100])
         self.assertEqual(original_style, api.styles[100])
@@ -163,9 +161,7 @@ class WindowsDesktopHostTest(unittest.TestCase):
         original_style = api.styles[100]
         api.desktop_parent = 0
         host = WindowsDesktopHost(api)
-
         result = host.attach(77)
-
         self.assertFalse(result.success)
         self.assertEqual(original_style, api.styles[100])
         self.assertEqual(0, api.parents[100])
@@ -176,6 +172,7 @@ class UnsupportedDesktopHostTest(unittest.TestCase):
         host = UnsupportedDesktopHost()
         self.assertFalse(host.supported)
         self.assertEqual([], host.displays())
+        self.assertIsNone(host.current_display_index(1))
         self.assertFalse(host.attach(1).success)
         self.assertTrue(host.detach().success)
         self.assertTrue(host.maintain(1).success)
