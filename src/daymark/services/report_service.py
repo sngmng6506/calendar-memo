@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date
 
 from daymark.models import ReportPeriod, ReportType, Task
+from daymark.services.llm_client import TextGenerator
 
 
 class ReportService:
@@ -53,8 +54,12 @@ class ReportService:
         )
         return "\n".join(lines)
 
+    def generate_ai(
+        self, period: ReportPeriod, tasks: list[Task], generator: TextGenerator
+    ) -> str:
+        return generator.generate(self.SYSTEM_PROMPT, self.build_prompt(period, tasks))
+
     def local_summary(self, period: ReportPeriod, tasks: list[Task]) -> str:
-        """Deterministic preview used when no LLM key is configured."""
         completed = [task for task in tasks if task.completed]
         pending = [task for task in tasks if not task.completed]
         title = {
