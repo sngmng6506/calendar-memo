@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from tkinter import messagebox, ttk
 
 from daymark.calendar_utils import WEEKDAY_LABELS, month_matrix, shift_month
+from daymark.holiday_calendar import KoreanHolidayCalendar
 from daymark.platform_integration import DesktopAttachResult, DesktopHost, create_desktop_host
 from daymark.repository import TaskRepository
 from daymark.settings import SettingsStore, clamp_opacity
 from daymark.theme import (
     DEFAULT_WINDOW_OPACITY,
+    HOLIDAY_RED,
     MUTED_TEXT,
-    SUBTLE_TEXT,
+    SATURDAY_BLUE,
     TEXT,
     WINDOW_BG,
     flat_button_options,
@@ -68,6 +70,7 @@ class DaymarkApp(tk.Tk):
         self.settings.window_opacity = self.window_opacity
         self._apply_window_effects()
         self.desktop_host = desktop_host or create_desktop_host()
+        self.holiday_calendar = KoreanHolidayCalendar()
         self.auto_desktop_mode = auto_desktop_mode
         self.desktop_mode_active = False
         self.desktop_mode_label = tk.StringVar(value="바탕화면")
@@ -90,12 +93,9 @@ class DaymarkApp(tk.Tk):
         try:
             self.attributes("-alpha", self.window_opacity)
         except tk.TclError:
-            # 일부 Linux window manager는 alpha를 제공하지 않는다.
             pass
 
     def _reapply_transparency(self) -> None:
-        # SetParent/overrideredirect 전환 직후 Windows가 layered 상태를 다시 계산하는
-        # 경우가 있어 즉시 + 지연 재적용한다. 네이티브 host도 같은 alpha를 적용한다.
         self._apply_window_effects()
         for delay in (50, 250):
             try:
@@ -167,7 +167,7 @@ class DaymarkApp(tk.Tk):
 
         actions = tk.Frame(self.toolbar, background=WINDOW_BG)
         actions.pack(side="right", padx=18, pady=13)
-        self._text_button(actions, "미완료 이동", self._carry_over, compact=True).pack(side="left")
+        self._text_button(actions, "미완료 복사", self._carry_over, compact=True).pack(side="left")
         self._text_button(actions, "AI 요약", self._open_report, compact=True).pack(side="left", padx=2)
         self._text_button(actions, "설정", self._open_settings, compact=True).pack(side="left")
         if self.desktop_host.supported:
@@ -186,7 +186,12 @@ class DaymarkApp(tk.Tk):
         for row in range(1, 7):
             self.calendar_frame.rowconfigure(row, weight=1, uniform="calendar")
         for column, label in enumerate(WEEKDAY_LABELS):
-            foreground = MUTED_TEXT if column < 5 else SUBTLE_TEXT
+            if column == 5:
+                foreground = SATURDAY_BLUE
+            elif column == 6:
+                foreground = HOLIDAY_RED
+            else:
+                foreground = MUTED_TEXT
             tk.Label(
                 self.calendar_frame,
                 text=label,
@@ -209,6 +214,7 @@ class DaymarkApp(tk.Tk):
                     task_date,
                     self.current.month,
                     self.repository,
+                    holiday_calendar=self.holiday_calendar,
                     on_changed=self._update_summary,
                     on_selected=self._select_date,
                 )
@@ -236,12 +242,16 @@ class DaymarkApp(tk.Tk):
 
     def _carry_over(self) -> None:
         today = date.today()
-        yesterday = today - timedelta(days=1)
-        moved = self.repository.move_incomplete(yesterday, today)
-        if moved:
+        copied = self.repository.copy_incomplete_before(today)
+        if copied:
             self.current = today.replace(day=1)
+            self.selected_date = today
             self.render_month()
-        messagebox.showinfo("미완료 업무 이동", f"{moved}건을 오늘로 이동했습니다.", parent=self)
+        messagebox.showinfo(
+            "미완료 업무 복사",
+            f"오늘 이전의 미완료 업무 {copied}건을 오늘로 복사했습니다.\n원래 날짜의 업무는 유지됩니다.",
+            parent=self,
+        )
 
     def _open_report(self) -> None:
         self._present_dialog(ReportDialog(self, self.repository, self.settings, self.selected_date))
@@ -278,8 +288,6 @@ class DaymarkApp(tk.Tk):
     def _present_dialog(self, dialog: tk.Toplevel) -> None:
         if not self.desktop_mode_active:
             return
-        # WorkerW의 자식 창에서 연 대화상자가 바탕화면 아래로 내려가지 않도록
-        # 최초 표시 순간에만 앞으로 올린 뒤 일반 Z-order로 되돌린다.
         try:
             dialog.attributes("-topmost", True)
             dialog.after(150, lambda: dialog.attributes("-topmost", False))
@@ -294,9 +302,19 @@ class DaymarkApp(tk.Tk):
         return "break"
 
     def _toggle_desktop_mode(self) -> None:
-        self._set_desktop_mode(not self.desktop_mode_active, notify=True)
+        self._set_desktop_mode(
+            not self.desktop_mode_active,
+            notify=True,
+            prefer_current_display=not self.desktop_mode_active,
+        )
 
-    def _set_desktop_mode(self, enabled: bool, *, notify: bool) -> None:
+    def _set_desktop_mode(
+        self,
+        enabled: bool,
+        *,
+        notify: bool,
+        prefer_current_display: bool = False,
+    ) -> None:
         if enabled:
             if not self.desktop_host.supported:
                 if notify:
@@ -307,6 +325,10 @@ class DaymarkApp(tk.Tk):
                     )
                 return
             self.normal_geometry = self.geometry()
+            if prefer_current_display:
+                current_display = self.desktop_host.current_display_index(self.winfo_id())
+                if current_display is not None:
+                    self.settings.desktop_display_index = current_display
             try:
                 self.overrideredirect(True)
                 self.update_idletasks()
