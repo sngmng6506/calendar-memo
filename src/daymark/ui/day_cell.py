@@ -93,7 +93,7 @@ class DayCell(tk.Frame):
         current_month: int,
         repository: TaskRepository,
         holiday_calendar: HolidayCalendar,
-        on_changed: Callable[[], None],
+        on_changed: Callable[[], None] | None,
         on_selected: Callable[[date], None],
         *,
         surface_bg: str = WINDOW_BG,
@@ -132,13 +132,13 @@ class DayCell(tk.Frame):
         self.scroll_container = tk.Frame(
             self, background=self.surface_bg, borderwidth=0, highlightthickness=0
         )
-        self.scroll_container.pack(fill="both", expand=True, pady=(7, 0))
+        self.scroll_container.pack(fill="both", expand=True, pady=(4, 0))
         self.canvas = tk.Canvas(
             self.scroll_container,
             background=self.surface_bg,
             borderwidth=0,
             highlightthickness=0,
-            yscrollincrement=26,
+            yscrollincrement=22,
         )
         self.scrollbar = tk.Scrollbar(
             self.scroll_container,
@@ -153,7 +153,9 @@ class DayCell(tk.Frame):
             width=6,
         )
         self.canvas.configure(yscrollcommand=self._on_yview)
-        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scroll_container.columnconfigure(0, weight=1)
+        self.scroll_container.rowconfigure(0, weight=1)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
         self.rows_frame = tk.Frame(
             self.canvas, background=self.surface_bg, borderwidth=0, highlightthickness=0
         )
@@ -209,7 +211,7 @@ class DayCell(tk.Frame):
 
     def _add_row(self, task: Task | None) -> TaskRow:
         row = self._create_row(task)
-        row.pack(fill="x", pady=1)
+        row.pack(fill="x", pady=0)
         return row
 
     def _commit_row(self, row: TaskRow, advance: bool) -> None:
@@ -226,7 +228,8 @@ class DayCell(tk.Frame):
             new_row = self._draft_after(row)
             new_row.focus_input()
             self._after_idle(lambda: self._scroll_row_into_view(new_row))
-        self.on_changed()
+        if self.on_changed is not None:
+            self.on_changed()
 
     def _toggle_row(self, row: TaskRow) -> None:
         self._mark_selected()
@@ -235,7 +238,8 @@ class DayCell(tk.Frame):
             return
         self.repository.set_completed(row.task.id, row.completed_var.get())
         row._apply_completed_style()
-        self.on_changed()
+        if self.on_changed is not None:
+            self.on_changed()
 
     def _delete_row(self, row: TaskRow) -> None:
         self._mark_selected()
@@ -244,10 +248,10 @@ class DayCell(tk.Frame):
         row.destroy()
         self._ensure_draft()
         self._after_idle(self._update_scroll_region)
-        self.on_changed()
+        if self.on_changed is not None:
+            self.on_changed()
 
     def _draft_after(self, row: TaskRow) -> TaskRow:
-        """Return exactly one draft row positioned immediately after ``row``."""
         siblings = list(self.rows_frame.winfo_children())
         row_index = siblings.index(row)
         next_sibling = siblings[row_index + 1] if row_index + 1 < len(siblings) else None
@@ -262,15 +266,15 @@ class DayCell(tk.Frame):
             draft = drafts[-1]
             draft.pack_forget()
             if next_sibling is None:
-                draft.pack(fill="x", pady=1)
+                draft.pack(fill="x", pady=0)
             else:
-                draft.pack(fill="x", pady=1, before=next_sibling)
+                draft.pack(fill="x", pady=0, before=next_sibling)
         else:
             draft = self._create_row(None)
             if next_sibling is None:
-                draft.pack(fill="x", pady=1)
+                draft.pack(fill="x", pady=0)
             else:
-                draft.pack(fill="x", pady=1, before=next_sibling)
+                draft.pack(fill="x", pady=0, before=next_sibling)
 
         for extra in drafts:
             if extra is not draft:
@@ -282,7 +286,7 @@ class DayCell(tk.Frame):
 
     def _create_draft_at_end(self) -> TaskRow:
         new_row = self._create_row(None)
-        new_row.pack(fill="x", pady=1)
+        new_row.pack(fill="x", pady=0)
         return new_row
 
     def _ensure_draft(self) -> None:
@@ -356,9 +360,9 @@ class DayCell(tk.Frame):
             required = self.rows_frame.winfo_reqheight()
             visible = self.canvas.winfo_height()
             if required > visible + 2 and not self.scrollbar.winfo_manager():
-                self.scrollbar.pack(side="right", fill="y")
+                self.scrollbar.grid(row=0, column=1, sticky="ns")
             elif required <= visible + 2 and self.scrollbar.winfo_manager():
-                self.scrollbar.pack_forget()
+                self.scrollbar.grid_remove()
                 self.canvas.yview_moveto(0.0)
         except tk.TclError:
             pass
