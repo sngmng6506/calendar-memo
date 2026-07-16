@@ -14,7 +14,7 @@ class SettingsStoreTest(unittest.TestCase):
             defaults = store.load()
             self.assertEqual("gpt-4.1-mini", defaults.llm_model)
             self.assertEqual(0, defaults.desktop_display_index)
-            self.assertEqual(0.86, defaults.window_opacity)
+            self.assertEqual(0.94, defaults.window_opacity)
             path.write_text("not-json", encoding="utf-8")
             self.assertEqual("https://api.openai.com/v1", store.load().llm_base_url)
 
@@ -27,14 +27,14 @@ class SettingsStoreTest(unittest.TestCase):
                     llm_model="test-model",
                     desktop_mode=False,
                     desktop_display_index=2,
-                    window_opacity=0.71,
+                    window_opacity=0.84,
                 )
             )
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual("test-model", data["llm_model"])
             self.assertFalse(data["desktop_mode"])
             self.assertEqual(2, data["desktop_display_index"])
-            self.assertEqual(0.71, data["window_opacity"])
+            self.assertEqual(0.84, data["window_opacity"])
             self.assertNotIn("api_key", data)
 
     def test_opacity_is_clamped_when_loaded(self) -> None:
@@ -51,7 +51,7 @@ class SettingsStoreTest(unittest.TestCase):
             )
             loaded = SettingsStore(path).load()
             self.assertEqual(0, loaded.desktop_display_index)
-            self.assertEqual(0.55, loaded.window_opacity)
+            self.assertEqual(0.78, loaded.window_opacity)
             self.assertEqual(1.0, clamp_opacity(3))
 
 

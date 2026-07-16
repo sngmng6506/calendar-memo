@@ -36,6 +36,36 @@ class GuiInteractionTest(unittest.TestCase):
             self.assertEqual(target, app.selected_date)
             app._close()
 
+    def test_pressing_enter_on_existing_task_reuses_single_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = DaymarkApp(Path(directory), auto_desktop_mode=False)
+            cell = app.day_cells[date.today()]
+            draft = next(
+                widget
+                for widget in cell.rows_frame.winfo_children()
+                if isinstance(widget, TaskRow) and widget.task is None
+            )
+            draft.content_var.set("업무")
+            draft._commit(None)
+            app.update_idletasks()
+            saved = next(
+                widget
+                for widget in cell.rows_frame.winfo_children()
+                if isinstance(widget, TaskRow) and widget.task is not None
+            )
+
+            saved._commit(None)
+            saved._commit(None)
+            app.update_idletasks()
+
+            drafts = [
+                widget
+                for widget in cell.rows_frame.winfo_children()
+                if isinstance(widget, TaskRow) and widget.task is None
+            ]
+            self.assertEqual(1, len(drafts))
+            app._close()
+
     def test_focus_out_updates_without_adding_another_draft(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app = DaymarkApp(Path(directory), auto_desktop_mode=False)

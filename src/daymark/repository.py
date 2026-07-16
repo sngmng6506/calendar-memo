@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from collections.abc import Iterable
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -183,6 +184,8 @@ class TaskRepository:
         if not history:
             return 0
 
+        # 계보별 가장 최근 사본의 완료 상태를 현재 상태로 본다. 최근 사본을 완료했다면
+        # 오래된 원본이 미완료로 남아 있어도 다음 날 다시 복사하지 않는다.
         latest_by_origin: dict[str, Task] = {}
         for task in history:
             origin = task.origin_task_id or task.id

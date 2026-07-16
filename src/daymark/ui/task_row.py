@@ -4,7 +4,116 @@ import tkinter as tk
 from collections.abc import Callable
 
 from daymark.models import Task
-from daymark.theme import CHECKED, INPUT_FOCUS_BG, MUTED_TEXT, TEXT, WINDOW_BG
+from daymark.theme import (
+    INPUT_FOCUS_BG,
+    MUTED_TEXT,
+    OUTSIDE_TEXT,
+    SUBTLE_TEXT,
+    TEXT,
+    WINDOW_BG,
+    fonts,
+)
+
+
+class RoundCheck(tk.Canvas):
+    CLICK_SIZE = 24
+    RADIUS = 7
+
+    def __init__(self, master: tk.Misc, command: Callable[[], None], *, surface_bg: str) -> None:
+        super().__init__(
+            master,
+            width=self.CLICK_SIZE,
+            height=self.CLICK_SIZE,
+            background=surface_bg,
+            borderwidth=0,
+            highlightthickness=0,
+            takefocus=True,
+            cursor="hand2",
+        )
+        self.command = command
+        self.surface_bg = surface_bg
+        self.completed = False
+        self.hovered = False
+        self.focused = False
+        self.bind("<Button-1>", self._click)
+        self.bind("<Return>", self._key_toggle)
+        self.bind("<space>", self._key_toggle)
+        self.bind("<Enter>", self._enter)
+        self.bind("<Leave>", self._leave)
+        self.bind("<FocusIn>", self._focus_in)
+        self.bind("<FocusOut>", self._focus_out)
+        self._draw()
+
+    def set_surface(self, surface_bg: str) -> None:
+        self.surface_bg = surface_bg
+        self.configure(background=surface_bg)
+        self._draw()
+
+    def set_completed(self, completed: bool) -> None:
+        self.completed = completed
+        self._draw()
+
+    def _click(self, _event: tk.Event) -> None:
+        self.focus_set()
+        self.command()
+
+    def _key_toggle(self, _event: tk.Event) -> str:
+        self.command()
+        return "break"
+
+    def _enter(self, _event: tk.Event) -> None:
+        self.hovered = True
+        self._draw()
+
+    def _leave(self, _event: tk.Event) -> None:
+        self.hovered = False
+        self._draw()
+
+    def _focus_in(self, _event: tk.Event) -> None:
+        self.focused = True
+        self._draw()
+
+    def _focus_out(self, _event: tk.Event) -> None:
+        self.focused = False
+        self._draw()
+
+    def _draw(self) -> None:
+        self.delete("all")
+        center = self.CLICK_SIZE / 2
+        radius = self.RADIUS
+        outline = TEXT if self.focused else (SUBTLE_TEXT if self.hovered else MUTED_TEXT)
+        fill = MUTED_TEXT if self.completed else self.surface_bg
+        if self.focused:
+            self.create_oval(
+                center - radius - 3,
+                center - radius - 3,
+                center + radius + 3,
+                center + radius + 3,
+                outline=SUBTLE_TEXT,
+                width=1,
+            )
+        self.create_oval(
+            center - radius,
+            center - radius,
+            center + radius,
+            center + radius,
+            outline=outline,
+            width=1.4,
+            fill=fill,
+        )
+        if self.completed:
+            self.create_line(
+                center - 4,
+                center,
+                center - 1,
+                center + 3,
+                center + 5,
+                center - 4,
+                fill=TEXT,
+                width=1.7,
+                capstyle="round",
+                joinstyle="round",
+            )
 
 
 class TaskRow(tk.Frame):
@@ -15,35 +124,26 @@ class TaskRow(tk.Frame):
         on_commit: Callable[["TaskRow", bool], None],
         on_toggle: Callable[["TaskRow"], None],
         on_delete: Callable[["TaskRow"], None],
+        *,
+        surface_bg: str = WINDOW_BG,
+        muted: bool = False,
     ) -> None:
-        super().__init__(master, background=WINDOW_BG, borderwidth=0, highlightthickness=0)
+        super().__init__(master, background=surface_bg, borderwidth=0, highlightthickness=0)
+        self.surface_bg = surface_bg
+        self.muted = muted
         self.task = task
         self.on_commit = on_commit
         self.on_toggle = on_toggle
         self.on_delete = on_delete
         self.completed_var = tk.BooleanVar(value=task.completed if task else False)
         self.content_var = tk.StringVar(value=task.content if task else "")
+        self.fonts = fonts(master)
 
-        self.checkbox = tk.Button(
-            self,
-            command=self._toggle,
-            background=WINDOW_BG,
-            activebackground=WINDOW_BG,
-            foreground=MUTED_TEXT,
-            activeforeground=TEXT,
-            relief="flat",
-            borderwidth=0,
-            highlightthickness=0,
-            padx=0,
-            pady=0,
-            width=2,
-            cursor="hand2",
-            font=("TkDefaultFont", 9),
-        )
+        self.checkbox = RoundCheck(self, self._toggle, surface_bg=self.surface_bg)
         self.entry = tk.Entry(
             self,
             textvariable=self.content_var,
-            background=WINDOW_BG,
+            background=self.surface_bg,
             foreground=TEXT,
             insertbackground=TEXT,
             selectbackground=INPUT_FOCUS_BG,
@@ -51,9 +151,9 @@ class TaskRow(tk.Frame):
             relief="flat",
             borderwidth=0,
             highlightthickness=0,
-            font=("TkDefaultFont", 9),
+            font=self.fonts.task,
         )
-        self.entry.pack(side="left", fill="x", expand=True, ipady=1)
+        self.entry.pack(side="left", fill="x", expand=True, ipady=5)
         self.entry.bind("<Return>", self._commit)
         self.entry.bind("<FocusIn>", self._focus_in)
         self.entry.bind("<FocusOut>", self._focus_out)
@@ -67,13 +167,20 @@ class TaskRow(tk.Frame):
         self._sync_task_widgets()
         self._apply_completed_style()
 
+    def set_surface(self, surface_bg: str) -> None:
+        self.surface_bg = surface_bg
+        self.configure(background=surface_bg)
+        self.checkbox.set_surface(surface_bg)
+        if self.focus_get() is not self.entry:
+            self.entry.configure(background=surface_bg)
+
     def focus_input(self) -> None:
         self.entry.focus_set()
         self.entry.icursor("end")
 
     def _sync_task_widgets(self) -> None:
         if self.task is not None and not self.checkbox.winfo_manager():
-            self.checkbox.pack(side="left", before=self.entry, padx=(0, 3))
+            self.checkbox.pack(side="left", before=self.entry, padx=(0, 5), pady=1)
         elif self.task is None and self.checkbox.winfo_manager():
             self.checkbox.pack_forget()
 
@@ -94,7 +201,7 @@ class TaskRow(tk.Frame):
         elif self.task is not None:
             self.on_commit(self, False)
         try:
-            self.entry.configure(background=WINDOW_BG)
+            self.entry.configure(background=self.surface_bg)
         except tk.TclError:
             pass
 
@@ -106,8 +213,11 @@ class TaskRow(tk.Frame):
 
     def _apply_completed_style(self) -> None:
         completed = self.completed_var.get()
-        self.entry.configure(foreground=MUTED_TEXT if completed else TEXT)
-        self.checkbox.configure(
-            text="✓" if completed else "□",
-            foreground=CHECKED if completed else MUTED_TEXT,
-        )
+        if completed:
+            foreground = MUTED_TEXT
+        elif self.muted:
+            foreground = OUTSIDE_TEXT
+        else:
+            foreground = TEXT
+        self.entry.configure(foreground=foreground)
+        self.checkbox.set_completed(completed)

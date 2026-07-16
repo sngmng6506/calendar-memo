@@ -46,7 +46,7 @@ class DesktopHost(Protocol):
         tk_window_id: int,
         *,
         display_index: int = 0,
-        opacity: float = 1.0,
+        opacity: float | None = 1.0,
     ) -> DesktopAttachResult: ...
 
     def detach(self) -> DesktopAttachResult: ...
@@ -56,7 +56,7 @@ class DesktopHost(Protocol):
         tk_window_id: int,
         *,
         display_index: int = 0,
-        opacity: float = 1.0,
+        opacity: float | None = 1.0,
     ) -> DesktopAttachResult: ...
 
 
@@ -81,7 +81,7 @@ class UnsupportedDesktopHost:
         tk_window_id: int,
         *,
         display_index: int = 0,
-        opacity: float = 1.0,
+        opacity: float | None = 1.0,
     ) -> DesktopAttachResult:
         del tk_window_id, display_index, opacity
         return DesktopAttachResult(False, message="Windows에서만 바탕화면 모드를 사용할 수 있습니다.")
@@ -94,7 +94,7 @@ class UnsupportedDesktopHost:
         tk_window_id: int,
         *,
         display_index: int = 0,
-        opacity: float = 1.0,
+        opacity: float | None = 1.0,
     ) -> DesktopAttachResult:
         del tk_window_id, display_index, opacity
         return DesktopAttachResult(True, message="일반 창 모드입니다.")

@@ -5,7 +5,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from daymark.theme import DEFAULT_WINDOW_OPACITY
+from daymark.theme import DEFAULT_WINDOW_OPACITY, MAX_WINDOW_OPACITY, MIN_WINDOW_OPACITY
 
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_LLM_MODEL = "gpt-4.1-mini"
@@ -20,7 +20,7 @@ def clamp_opacity(value: object) -> float:
         opacity = float(value)
     except (TypeError, ValueError):
         opacity = DEFAULT_WINDOW_OPACITY
-    return min(1.0, max(0.55, opacity))
+    return min(MAX_WINDOW_OPACITY, max(MIN_WINDOW_OPACITY, opacity))
 
 
 @dataclass(slots=True)
