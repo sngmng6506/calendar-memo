@@ -4,13 +4,14 @@ import os
 import threading
 import tkinter as tk
 from datetime import date, timedelta
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 from daymark.models import ReportPeriod, ReportType
 from daymark.repository import TaskRepository
 from daymark.services.llm_client import LlmError, OpenAICompatibleClient
 from daymark.services.report_service import ReportService
 from daymark.settings import AppSettings
+from daymark.theme import INPUT_FOCUS_BG, MUTED_TEXT, TEXT, WINDOW_BG, flat_button_options
 
 
 class ReportDialog(tk.Toplevel):
@@ -24,6 +25,7 @@ class ReportDialog(tk.Toplevel):
         super().__init__(master)
         self.title("AI 업무보고")
         self.geometry("720x560")
+        self.configure(background=WINDOW_BG)
         self.repository = repository
         self.settings = settings
         self.selected_date = selected_date
@@ -33,23 +35,53 @@ class ReportDialog(tk.Toplevel):
         self._build()
         self.transient(master)
 
+    def _button(self, master: tk.Misc, text: str, command: object) -> tk.Button:
+        return tk.Button(master, text=text, command=command, **flat_button_options(compact=True))
+
     def _build(self) -> None:
-        controls = ttk.Frame(self, padding=12)
+        controls = tk.Frame(self, background=WINDOW_BG, padx=14, pady=12)
         controls.pack(fill="x")
-        ttk.Label(controls, text="보고서").pack(side="left")
-        ttk.Combobox(
-            controls,
-            textvariable=self.report_type,
-            state="readonly",
-            width=12,
-            values=[item.value for item in ReportType],
-        ).pack(side="left", padx=8)
-        ttk.Button(controls, text="로컬 미리보기", command=self._preview).pack(side="left")
-        ttk.Button(controls, text="LLM으로 생성", command=self._generate).pack(side="left", padx=6)
-        ttk.Button(controls, text="복사", command=self._copy).pack(side="right")
-        self.text = tk.Text(self, wrap="word", padx=14, pady=14, undo=True)
-        self.text.pack(fill="both", expand=True, padx=12, pady=(0, 8))
-        ttk.Label(self, textvariable=self.status, padding=(12, 0, 12, 10)).pack(fill="x")
+        tk.Label(controls, text="보고서", background=WINDOW_BG, foreground=TEXT).pack(side="left")
+        option = tk.OptionMenu(controls, self.report_type, *[item.value for item in ReportType])
+        option.configure(
+            background=WINDOW_BG,
+            activebackground=INPUT_FOCUS_BG,
+            foreground=TEXT,
+            activeforeground=TEXT,
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            width=9,
+        )
+        option["menu"].configure(background=WINDOW_BG, foreground=TEXT, activebackground=INPUT_FOCUS_BG)
+        option.pack(side="left", padx=8)
+        self._button(controls, "로컬 미리보기", self._preview).pack(side="left")
+        self._button(controls, "LLM으로 생성", self._generate).pack(side="left", padx=4)
+        self._button(controls, "복사", self._copy).pack(side="right")
+        self.text = tk.Text(
+            self,
+            wrap="word",
+            padx=16,
+            pady=16,
+            undo=True,
+            background=INPUT_FOCUS_BG,
+            foreground=TEXT,
+            insertbackground=TEXT,
+            selectbackground="#38414b",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        self.text.pack(fill="both", expand=True, padx=14, pady=(0, 8))
+        tk.Label(
+            self,
+            textvariable=self.status,
+            background=WINDOW_BG,
+            foreground=MUTED_TEXT,
+            anchor="w",
+            padx=14,
+            pady=8,
+        ).pack(fill="x")
 
     def _period(self) -> ReportPeriod:
         report_type = ReportType(self.report_type.get())

@@ -9,6 +9,14 @@ from tkinter import messagebox, ttk
 from daymark.calendar_utils import WEEKDAY_LABELS, month_matrix, shift_month
 from daymark.repository import TaskRepository
 from daymark.settings import SettingsStore
+from daymark.theme import (
+    DEFAULT_WINDOW_OPACITY,
+    MUTED_TEXT,
+    SUBTLE_TEXT,
+    TEXT,
+    WINDOW_BG,
+    flat_button_options,
+)
 from daymark.ui.day_cell import DayCell
 from daymark.ui.report_dialog import ReportDialog
 from daymark.ui.settings_dialog import SettingsDialog
@@ -24,12 +32,25 @@ def default_data_dir() -> Path:
     return root / "daymark-calendar"
 
 
+def resolve_window_opacity(value: str | None = None) -> float:
+    raw = value if value is not None else os.environ.get("DAYMARK_OPACITY", "")
+    try:
+        opacity = float(raw) if raw else DEFAULT_WINDOW_OPACITY
+    except ValueError:
+        opacity = DEFAULT_WINDOW_OPACITY
+    return min(1.0, max(0.55, opacity))
+
+
 class DaymarkApp(tk.Tk):
     def __init__(self, data_dir: Path | None = None) -> None:
         super().__init__()
         self.title(f"{APP_NAME} — 업무 캘린더")
         self.geometry("1280x820")
         self.minsize(920, 620)
+        self.configure(background=WINDOW_BG)
+        self.window_opacity = resolve_window_opacity()
+        self._apply_window_effects()
+
         self.data_dir = data_dir or default_data_dir()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.repository = TaskRepository(self.data_dir / "daymark.db")
@@ -44,39 +65,92 @@ class DaymarkApp(tk.Tk):
         self.render_month()
         self.protocol("WM_DELETE_WINDOW", self._close)
 
+    def _apply_window_effects(self) -> None:
+        try:
+            self.attributes("-alpha", self.window_opacity)
+        except tk.TclError:
+            # 일부 Linux window manager는 alpha를 제공하지 않는다.
+            pass
+
     def _configure_styles(self) -> None:
         style = ttk.Style(self)
         if "clam" in style.theme_names():
             style.theme_use("clam")
-        style.configure("Day.TLabel", font=("TkDefaultFont", 10, "bold"))
-        style.configure("Muted.TLabel", foreground="#888888")
-        style.configure("Today.TLabel", font=("TkDefaultFont", 10, "bold"), foreground="#2457d6")
-        style.configure("Completed.TEntry", foreground="#888888")
-        style.configure("Draft.TEntry", foreground="#777777")
-        style.configure("Weekday.TLabel", font=("TkDefaultFont", 10, "bold"), anchor="center")
+        style.configure("TFrame", background=WINDOW_BG)
+        style.configure("TLabel", background=WINDOW_BG, foreground=TEXT)
+        style.configure("TButton", background=WINDOW_BG, foreground=TEXT, borderwidth=0)
+        style.map("TButton", background=[("active", WINDOW_BG)])
+        style.configure("TEntry", fieldbackground=WINDOW_BG, foreground=TEXT)
+
+    def _text_button(
+        self,
+        master: tk.Misc,
+        text: str,
+        command: object,
+        *,
+        compact: bool = False,
+        font: tuple[str, int, str] | tuple[str, int] | None = None,
+    ) -> tk.Button:
+        button = tk.Button(master, text=text, command=command, **flat_button_options(compact=compact))
+        if font is not None:
+            button.configure(font=font)
+        return button
 
     def _build_shell(self) -> None:
-        toolbar = ttk.Frame(self, padding=(12, 10))
-        toolbar.pack(fill="x")
-        ttk.Button(toolbar, text="‹", width=3, command=lambda: self._change_month(-1)).pack(side="left")
-        ttk.Button(toolbar, text="오늘", command=self._go_today).pack(side="left", padx=6)
-        ttk.Button(toolbar, text="›", width=3, command=lambda: self._change_month(1)).pack(side="left")
-        ttk.Label(toolbar, textvariable=self.month_title, font=("TkDefaultFont", 15, "bold")).pack(side="left", padx=16)
-        ttk.Button(toolbar, text="설정", command=self._open_settings).pack(side="right")
-        ttk.Button(toolbar, text="AI 보고서", command=self._open_report).pack(side="right", padx=6)
-        ttk.Button(toolbar, text="어제 미완료 → 오늘", command=self._carry_over).pack(side="right")
+        self.toolbar = tk.Frame(self, background=WINDOW_BG, height=66)
+        self.toolbar.pack(fill="x")
+        self.toolbar.pack_propagate(False)
 
-        ttk.Label(self, textvariable=self.summary, padding=(12, 0, 12, 8)).pack(fill="x")
-        self.calendar_frame = ttk.Frame(self, padding=(10, 0, 10, 10))
+        self.nav_frame = tk.Frame(self.toolbar, background=WINDOW_BG)
+        self.nav_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self._text_button(
+            self.nav_frame,
+            "‹",
+            lambda: self._change_month(-1),
+            compact=True,
+            font=("TkDefaultFont", 20),
+        ).pack(side="left")
+        tk.Label(
+            self.nav_frame,
+            textvariable=self.month_title,
+            background=WINDOW_BG,
+            foreground=TEXT,
+            font=("TkDefaultFont", 16, "bold"),
+            padx=14,
+        ).pack(side="left")
+        self._text_button(
+            self.nav_frame,
+            "›",
+            lambda: self._change_month(1),
+            compact=True,
+            font=("TkDefaultFont", 20),
+        ).pack(side="left")
+        self._text_button(self.nav_frame, "오늘", self._go_today, compact=True).pack(
+            side="left", padx=(10, 0)
+        )
+
+        actions = tk.Frame(self.toolbar, background=WINDOW_BG)
+        actions.pack(side="right", padx=18, pady=13)
+        self._text_button(actions, "미완료 이동", self._carry_over, compact=True).pack(side="left")
+        self._text_button(actions, "AI 요약", self._open_report, compact=True).pack(side="left", padx=2)
+        self._text_button(actions, "설정", self._open_settings, compact=True).pack(side="left")
+
+        self.calendar_frame = tk.Frame(self, background=WINDOW_BG, padx=16, pady=4)
         self.calendar_frame.pack(fill="both", expand=True)
         for column in range(7):
             self.calendar_frame.columnconfigure(column, weight=1, uniform="calendar")
         for row in range(1, 7):
             self.calendar_frame.rowconfigure(row, weight=1, uniform="calendar")
         for column, label in enumerate(WEEKDAY_LABELS):
-            ttk.Label(self.calendar_frame, text=label, style="Weekday.TLabel").grid(
-                row=0, column=column, sticky="ew", pady=(0, 5)
-            )
+            foreground = MUTED_TEXT if column < 5 else SUBTLE_TEXT
+            tk.Label(
+                self.calendar_frame,
+                text=label,
+                background=WINDOW_BG,
+                foreground=foreground,
+                font=("TkDefaultFont", 9, "bold"),
+                anchor="center",
+            ).grid(row=0, column=column, sticky="ew", pady=(0, 8))
 
     def render_month(self) -> None:
         for child in self.calendar_frame.grid_slaves():
@@ -94,14 +168,14 @@ class DaymarkApp(tk.Tk):
                     on_changed=self._update_summary,
                     on_selected=self._select_date,
                 )
-                cell.grid(row=week, column=column, sticky="nsew", padx=2, pady=2)
+                cell.grid(row=week, column=column, sticky="nsew", padx=8, pady=4)
         self._update_summary()
 
     def _update_summary(self) -> None:
         matrix = month_matrix(self.current.year, self.current.month)
         tasks = self.repository.list_between(matrix[0][0], matrix[-1][-1])
         completed = sum(task.completed for task in tasks)
-        self.summary.set(f"표시 기간 업무 {len(tasks)}건 · 완료 {completed}건 · 미완료 {len(tasks) - completed}건")
+        self.summary.set(f"업무 {len(tasks)} · 완료 {completed} · 미완료 {len(tasks) - completed}")
 
     def _select_date(self, selected: date) -> None:
         self.selected_date = selected

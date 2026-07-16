@@ -36,6 +36,38 @@ class GuiInteractionTest(unittest.TestCase):
             self.assertEqual(target, app.selected_date)
             app._close()
 
+    def test_focus_out_updates_without_adding_another_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = DaymarkApp(Path(directory))
+            target = date.today()
+            cell = next(
+                widget
+                for widget in app.calendar_frame.grid_slaves()
+                if isinstance(widget, DayCell) and widget.task_date == target
+            )
+            draft = next(
+                widget
+                for widget in cell.rows_frame.winfo_children()
+                if isinstance(widget, TaskRow) and widget.task is None
+            )
+            draft.content_var.set("초기 업무")
+            draft._commit(None)
+            app.update_idletasks()
+            draft_count_before = sum(
+                isinstance(widget, TaskRow) and widget.task is None
+                for widget in cell.rows_frame.winfo_children()
+            )
+            draft.content_var.set("수정 업무")
+            draft._focus_out(None)
+            app.update_idletasks()
+            draft_count_after = sum(
+                isinstance(widget, TaskRow) and widget.task is None
+                for widget in cell.rows_frame.winfo_children()
+            )
+            self.assertEqual(draft_count_before, draft_count_after)
+            self.assertEqual("수정 업무", app.repository.list_for_date(target)[0].content)
+            app._close()
+
 
 if __name__ == "__main__":
     unittest.main()
