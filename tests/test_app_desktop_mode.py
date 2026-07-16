@@ -8,6 +8,17 @@ from daymark.app import DaymarkApp
 from daymark.platform_integration.desktop_host import DesktopAttachResult, DisplayInfo
 
 
+def _force_single_surface(app: DaymarkApp) -> None:
+    """Pin the app to the single-surface path.
+
+    On Windows the app builds a split foreground/backdrop pair, which routes
+    opacity to the backdrop host instead of the foreground host. These tests
+    cover the single-surface routing; the split path has its own test.
+    """
+    app.split_surface_enabled = False
+    app.backdrop = None
+
+
 class FakeDesktopHost:
     def __init__(self, *, attach_success: bool = True) -> None:
         self.attach_success = attach_success
@@ -83,9 +94,10 @@ class FakeDesktopHost:
 
 class AppDesktopModeTest(unittest.TestCase):
     def test_toggle_passes_saved_monitor_and_opacity(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             host = FakeDesktopHost()
             app = DaymarkApp(Path(directory), desktop_host=host, auto_desktop_mode=False)
+            _force_single_surface(app)
             app.settings.desktop_display_index = 1
             app.settings.window_opacity = 0.83
             app.settings_store.save(app.settings)
@@ -108,7 +120,7 @@ class AppDesktopModeTest(unittest.TestCase):
             app._close()
 
     def test_user_toggle_uses_monitor_containing_window(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             host = FakeDesktopHost()
             host.current_window_display = 1
             app = DaymarkApp(Path(directory), desktop_host=host, auto_desktop_mode=False)
@@ -122,9 +134,10 @@ class AppDesktopModeTest(unittest.TestCase):
             app._close()
 
     def test_settings_change_repositions_active_desktop(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             host = FakeDesktopHost()
             app = DaymarkApp(Path(directory), desktop_host=host, auto_desktop_mode=False)
+            _force_single_surface(app)
             app._set_desktop_mode(True, notify=False)
             app.settings.desktop_display_index = 1
             app.settings.window_opacity = 0.84
@@ -137,7 +150,7 @@ class AppDesktopModeTest(unittest.TestCase):
             app._close()
 
     def test_failed_attach_falls_back_and_disables_saved_mode(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             host = FakeDesktopHost(attach_success=False)
             app = DaymarkApp(Path(directory), desktop_host=host, auto_desktop_mode=False)
             app._set_desktop_mode(True, notify=False)
@@ -149,7 +162,7 @@ class AppDesktopModeTest(unittest.TestCase):
     def test_split_surface_keeps_foreground_opaque_and_previews_backdrop(self) -> None:
         import tkinter as tk
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             foreground = FakeDesktopHost()
             backdrop_host = FakeDesktopHost()
             app = DaymarkApp(
@@ -177,7 +190,7 @@ class AppDesktopModeTest(unittest.TestCase):
     def test_backdrop_attach_failure_detaches_successful_foreground(self) -> None:
         import tkinter as tk
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             foreground = FakeDesktopHost(attach_success=True)
             backdrop_host = FakeDesktopHost(attach_success=False)
             app = DaymarkApp(
@@ -200,7 +213,7 @@ class AppDesktopModeTest(unittest.TestCase):
     def test_maintenance_failure_detaches_both_surfaces(self) -> None:
         import tkinter as tk
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             foreground = FakeDesktopHost()
             backdrop_host = FakeDesktopHost()
             app = DaymarkApp(
