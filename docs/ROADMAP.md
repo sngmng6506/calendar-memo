@@ -1,83 +1,18 @@
-# Roadmap
+﻿# Roadmap
 
-로드맵 항목은 승인된 기능이 아니라 후보 목록이다. 구현 전 `AGENTS.md`의 Scope Guard를 확인한다.
+## Now
 
-## v0.1 Complete
+- Stabilize the calendar-first terminal dashboard.
+- Keep task entry, completion, carry-over, settings, and desktop mode reliable.
+- Avoid adding AI until the base workflow and visual system are settled.
 
-- 월간 달력
-- 인라인 체크리스트
-- SQLite 저장
-- 미완료 업무를 오늘로 이동
-- 일간·주간·월간 요약
-- OpenAI 호환 보고서
+## Next
 
-## v0.2 Complete
+- Build the `TODAY` page for daily execution.
+- Build the `SIGNALS` page as the home for SNS and external integrations.
+- Build the `LOG` page for completed work and audit history.
 
-- 중앙 내비게이션
-- 무테두리 날짜 레이아웃
-- 반투명 평면 디자인
-- 빈 입력칸과 체크박스 숨김
+## Later
 
-## v0.3 Implemented
-
-- Windows WorkerW/Progman 바탕화면 연결
-- 일반 창 전환과 설정 저장
-- Explorer 재시작 재연결
-- 연결 실패 롤백
-- `--window` / `--desktop` 복구 옵션
-
-## v0.4 Complete
-
-- 선택 모니터 한 대에만 바탕화면 배치
-- 설정에서 모니터 선택
-- 설정에서 투명도 조절 및 즉시 적용
-- WorkerW attach/maintain 시 layered alpha 재적용
-
-## v0.5 Complete
-
-- 오늘 이전 모든 미완료 업무를 원본 보존 방식으로 오늘에 복사
-- 복사 계보와 같은 날 중복 방지
-- 일반 창이 있는 모니터로 바탕화면 모드 자동 전환
-- 토요일 파란색, 일요일·대한민국 공휴일 빨간색
-- `python-holidays` 우선 사용과 2020~2050년 내장 폴백
-
-## v0.6 Complete
-
-- Apple 계열 팔레트와 공통 폰트 토큰
-- 기본/최소 투명도 상향 및 글자 불투명 유지
-- 오늘 원형 표시와 선택 날짜 배경
-- 상단 `AI 요약 ···` 구조와 관리 기능 메뉴 이동
-- 원형 체크 컨트롤과 날짜별 오버플로 스크롤
-- 설정·AI 요약 창 스타일 통일
-- 논리 단위 `Why / Decision` 커밋 기록
-
-## v0.7 Complete
-
-- 고정 6주·42칸과 현재 월 밖 날짜·업무의 약한 명암
-- 낮은 채도의 주말·공휴일 색상과 흐린 요일 헤더
-- 비모달 평면 더보기 팝업과 비차단 미완료 복사 토스트
-- 24px 원형 체크 클릭 영역과 키보드 포커스 표시
-- 커스텀 평면 투명도 슬라이더 및 설정·AI 요약 계층 정리
-
-## Next Candidates
-
-- Windows 10/11 실기기 호환성 매트릭스
-- Windows 단일 실행 파일 패키징
-- Windows 시작 프로그램 등록
-- 날짜 셀 내부 스크롤 또는 접기
-- 보고서 이력 조회
-- Markdown 내보내기
-
-## Explicitly Deferred
-
-로그인, 클라우드 동기화, 협업, 태그·프로젝트, 반복 일정, 외부 캘린더 연동은 제품 정체성을 다시 검토하기 전까지 보류한다.
-
-
-## v0.6.1 Audit Complete
-
-- 단일 날짜 셀의 빈 입력 행 중복 누적 제거
-- 전경/배경 WorkerW 부분 실패 시 원자적 폴백
-- AI 생성 스레드와 Tk UI 생명주기 분리
-- 잘못된 LLM URL·JSON·content 응답 복구
-- 투명도 미리보기 지연 콜백 디바운스
-- 56개 회귀 테스트 및 엄격 감사 기록
+- Add AI as a separate module after SNS and dashboard patterns are mature.
+- Package the app for Windows distribution.

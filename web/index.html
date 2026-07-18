@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daymark Ops Console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="ops-shell">
+      <header class="topbar">
+        <div class="drag-zone">
+          <div id="systemClock" class="system-clock"></div>
+        </div>
+        <nav id="pageTabs" class="page-tabs" aria-label="Pages"></nav>
+        <div class="title-drag-handle" aria-hidden="true"></div>
+        <div class="window-actions">
+          <button id="desktopButton" class="terminal-button">DESKTOP</button>
+          <button id="settingsButton" class="terminal-button">SETTINGS</button>
+          <button id="minimizeButton" class="terminal-icon" title="Minimize">_</button>
+          <button id="maximizeButton" class="terminal-icon" title="Maximize">[ ]</button>
+          <button id="closeButton" class="terminal-icon danger" title="Close">X</button>
+        </div>
+      </header>
+
+      <section class="status-strip" id="statusStrip"></section>
+
+      <section class="workspace">
+        <section class="main-panel">
+          <div id="pageMount" class="page-mount"></div>
+        </section>
+        <aside class="inspector" id="inspector"></aside>
+      </section>
+
+      <div id="toast" class="toast hidden"></div>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

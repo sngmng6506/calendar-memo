@@ -11,3 +11,7 @@ build/
 .pytest_cache/
 .DS_Store
 .env
+node_modules/
+npm-debug.log*
+tools/daymark-desktop-host/bin/
+tools/daymark-desktop-host/obj/

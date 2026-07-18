@@ -1,0 +1,16 @@
+{
+    "name":  "daymark-ops-console",
+    "version":  "0.9.0",
+    "private":  true,
+    "description":  "A terminal-style Electron desktop dashboard for calendar-first personal operations.",
+    "main":  "electron/main.js",
+    "scripts":  {
+                    "start":  "electron .",
+                    "dev":  "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:DAYMARK_DEV=\u00271\u0027; electron .\"",
+                    "check":  "node --check electron/main.js \u0026\u0026 node --check electron/preload.js \u0026\u0026 node --check web/utils.js \u0026\u0026 node --check web/tasks.js \u0026\u0026 node --check web/pages/calendar.js \u0026\u0026 node --check web/pages/dateInspector.js \u0026\u0026 node --check web/pages/today.js \u0026\u0026 node --check web/pages/analytics.js \u0026\u0026 node --check web/pages/signals.js \u0026\u0026 node --check web/app.js",
+                    "build:desktop-host":  "powershell -ExecutionPolicy Bypass -File scripts/build-desktop-host.ps1"
+                },
+    "dependencies":  {
+                         "electron":  "^31.7.7"
+                     }
+}
