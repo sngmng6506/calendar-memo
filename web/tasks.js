@@ -19,7 +19,12 @@ export function addTask(store, taskDate, content, originTaskId = null, descripti
 export function removeTask(store, taskId) {
   const task = store.tasks.find((item) => item.id === taskId);
   store.tasks = store.tasks.filter((item) => item.id !== taskId);
-  if (task) normalizeOrders(store, task.taskDate);
+  if (task) {
+    const deletedAt = new Date().toISOString();
+    store.deleted ||= [];
+    store.deleted.push({ collection: 'tasks', recordId: task.id, deletedAt });
+    normalizeOrders(store, task.taskDate);
+  }
 }
 
 export function normalizeOrders(store, taskDate) {

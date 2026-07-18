@@ -111,8 +111,19 @@ function renderTodayTaskRow(task, actions) {
   });
   input.addEventListener('blur', () => actions.commitExisting(task, input.value));
 
+  const remove = document.createElement('button');
+  remove.className = 'task-delete';
+  remove.type = 'button';
+  remove.title = 'Delete task';
+  remove.textContent = 'DEL';
+  remove.addEventListener('click', async () => {
+    actions.removeTask(task.id);
+    await actions.persist();
+    actions.renderAll();
+  });
+
   body.append(input, actions.renderDescriptionInput(task, 'description-input today-description terminal-description'));
-  row.append(check, body);
+  row.append(check, body, remove);
   return row;
 }
 

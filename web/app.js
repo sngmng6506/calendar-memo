@@ -16,11 +16,6 @@ import {
 import { renderCalendarPage as renderCalendarPageView } from './pages/calendar.js';
 import { renderDateInspector as renderDateInspectorView } from './pages/dateInspector.js';
 import {
-  renderSignalsInspector as renderSignalsInspectorView,
-  renderSignalsPage as renderSignalsPageView,
-  signalsByStatus as selectSignalsByStatus
-} from './pages/signals.js';
-import {
   completeTodayOpenTasks as completeTodayOpenTasksAction,
   renderTodayInspector as renderTodayInspectorView,
   renderTodayPage as renderTodayPageView
@@ -35,13 +30,12 @@ import {
   tasksForDate as selectTasksForDate,
   tasksForVisibleMonth as selectTasksForVisibleMonth
 } from './tasks.js';
+import { seedDemoData } from './devSeed.js';
 
 const pageRegistry = [
   { id: 'calendar', label: 'CALENDAR', render: renderCalendarPage },
   { id: 'today', label: 'TODAY', render: renderTodayPage },
-  { id: 'signals', label: 'SIGNALS', render: renderSignalsPage },
-  { id: 'analytics', label: 'ANALYTICS', render: renderAnalyticsPage },
-  { id: 'log', label: 'LOG', render: () => renderPlaceholderPage('LOG', '?? ??? ?? ??? ??? ??? ? ?????.') }
+  { id: 'analytics', label: 'ANALYTICS', render: renderAnalyticsPage }
 ];
 
 const state = {
@@ -50,9 +44,14 @@ const state = {
   selected: isoDate(new Date()),
   page: 'calendar',
   inspectorMode: 'date',
+  selectedTaskId: null,
+  displayBounds: null,
+  showDesktopSize: false,
   toastTimer: null,
   clockTimer: null,
   analyticsTimer: null,
+  syncTimer: null,
+  syncInFlight: false,
   lastActiveTick: null
 };
 
@@ -61,46 +60,43 @@ const els = {};
 window.addEventListener('DOMContentLoaded', async () => {
   bindElements();
   state.store = await window.daymark.loadStore();
+  state.displayBounds = await window.daymark.displayBounds?.().catch(() => null);
   applySurfaceOpacity(Number(state.store.settings.windowOpacity ?? 0.86));
   bindActions();
   startClock();
   startAnalyticsTracking();
+  startSyncTracking();
   renderAll();
 });
 
 function bindElements() {
   for (const id of [
     'pageTabs', 'systemClock', 'statusStrip', 'pageMount', 'inspector',
-    'desktopButton', 'settingsButton', 'minimizeButton', 'maximizeButton', 'closeButton', 'toast'
+    'settingsButton', 'toast'
   ]) {
     els[id] = document.getElementById(id);
   }
 }
 
 function bindActions() {
-  els.desktopButton.addEventListener('click', () => setDesktopMode(!state.store.settings.desktopMode));
   els.settingsButton.addEventListener('click', () => {
     state.inspectorMode = state.inspectorMode === 'settings' ? 'date' : 'settings';
     renderInspector();
   });
-  els.minimizeButton.addEventListener('click', () => window.daymark.minimize());
-  els.maximizeButton.addEventListener('click', toggleMaximize);
-  window.daymark.onMaximizedChange?.(updateMaximizeButton);
-  window.daymark.isMaximized?.().then(updateMaximizeButton);
-  els.closeButton.addEventListener('click', () => window.daymark.close());
+  window.daymark.onTrayToggleDesktop?.(() => {
+    setDesktopMode(!state.store.settings.desktopMode);
+  });
+  window.daymark.onTrayOpenSettings?.(async () => {
+    // Desktop mode is click-through, so drop back to a window before showing settings.
+    if (state.store.settings.desktopMode) await setDesktopMode(false);
+    state.inspectorMode = 'settings';
+    renderInspector();
+  });
+  els.pageMount.addEventListener('click', handleTaskContainerClick);
+  els.inspector.addEventListener('click', handleTaskContainerClick);
   window.addEventListener('keydown', handleGlobalKeydown);
 }
 
-async function toggleMaximize() {
-  const maximized = await window.daymark.toggleMaximize();
-  updateMaximizeButton(Boolean(maximized));
-}
-
-function updateMaximizeButton(maximized) {
-  if (!els.maximizeButton) return;
-  els.maximizeButton.textContent = maximized ? '[#]' : '[ ]';
-  els.maximizeButton.title = maximized ? 'Restore' : 'Maximize';
-}
 function startAnalyticsTracking() {
   state.lastActiveTick = Date.now();
   state.analyticsTimer = setInterval(recordActiveTime, 30000);
@@ -110,13 +106,24 @@ function startAnalyticsTracking() {
 async function recordActiveTime() {
   await recordAnalyticsTime({ state, persist, renderAll });
 }
+function startSyncTracking() {
+  clearInterval(state.syncTimer);
+  state.syncTimer = setInterval(() => syncNow({ quiet: true }), 180000);
+  setTimeout(() => syncNow({ quiet: true }), 1200);
+}
+
+function syncConfigured() {
+  return Boolean(String(state.store.settings.syncUrl || '').trim() && String(state.store.settings.syncKey || '').trim().length >= 16);
+}
+
 function renderAll() {
   document.body.classList.toggle('analytics-mode', state.page === 'analytics');
+  document.body.classList.toggle('desktop-mode', Boolean(state.store.settings.desktopMode));
   renderTabs();
   renderStatusStrip();
   renderPage();
   renderInspector();
-  updateDesktopButton(Boolean(state.store.settings.desktopMode));
+  applyTaskSelection();
 }
 
 function renderTabs() {
@@ -141,7 +148,6 @@ function renderStatusStrip() {
   const open = monthTasks.length - done;
   const selectedTasks = tasksForDate(state.selected);
   const carry = state.store.tasks.filter((task) => task.taskDate < isoDate(new Date()) && !task.completed).length;
-  const signals = signalsByStatus('INBOX');
   const rows = [
     ['PAGE', activePage().label],
     ['MONTH', `${state.current.getFullYear()}-${pad2(state.current.getMonth() + 1)}`],
@@ -175,7 +181,6 @@ function renderCalendarPage() {
     current: state.current,
     selected: state.selected,
     tasksForDate,
-    changeMonth,
     goToday,
     carryIncomplete,
     selectDate,
@@ -198,27 +203,8 @@ function renderTodayPage() {
 async function completeTodayOpenTasks() {
   await completeTodayOpenTasksAction({ tasksForDate, persist, renderAll, showToast });
 }
-function renderSignalsPage() {
-  renderSignalsPageView({
-    mount: els.pageMount,
-    store: state.store,
-    addTask,
-    persist,
-    renderAll,
-    showToast,
-    copy: (value) => window.daymark.copy(value)
-  });
-}
-
-function signalsByStatus(status) {
-  return selectSignalsByStatus(state.store, status);
-}
-
-function renderSignalsInspector() {
-  renderSignalsInspectorView({ inspector: els.inspector, store: state.store });
-}
 function renderAnalyticsPage() {
-  renderAnalyticsPageView({ mount: els.pageMount, analyticsDay });
+  renderAnalyticsPageView({ mount: els.pageMount, analyticsDay, store: state.store });
 }
 
 function analyticsDay(dayId) {
@@ -267,7 +253,7 @@ function renderInspector() {
     els.inspector.innerHTML = '';
     return;
   }
-  if (state.inspectorMode === 'roadmap' || state.inspectorMode === 'signals' || state.inspectorMode === 'log') {
+  if (state.inspectorMode === 'roadmap') {
     renderRoadmapInspector();
     return;
   }
@@ -412,8 +398,17 @@ async function commitDescription(task, value, textarea = null) {
   await persist();
   renderAll();
 }
+function desktopSizeLabel() {
+  const saved = state.store.settings.desktopBounds;
+  return saved ? ` (${saved.width}x${saved.height})` : ' (FULL)';
+}
+
 function renderSettingsInspector() {
   const opacity = Number(state.store.settings.windowOpacity ?? 0.86);
+  const lastSync = state.store.settings.lastSyncedAt || 'never';
+  const screenBounds = state.displayBounds;
+  const fallback = screenBounds || { x: 0, y: 0, width: 1920, height: 1080 };
+  const bounds = state.store.settings.desktopBounds || fallback;
   els.inspector.innerHTML = `
     <div class="inspector-block">
       <div class="eyebrow">SETTINGS</div>
@@ -425,8 +420,37 @@ function renderSettingsInspector() {
       <p class="muted">?? ???? ?????. ?? ?, ??, ?? ??? ???? ?????.</p>
     </div>
     <div class="inspector-block">
+      <div class="eyebrow">SYNC</div>
+      <div class="setting-row">
+        <label for="syncUrlInput">SYNC URL</label>
+        <input id="syncUrlInput" class="settings-input" value="${escapeHtml(state.store.settings.syncUrl || '')}" placeholder="https://your-app.up.railway.app" autocomplete="off">
+      </div>
+      <div class="setting-row">
+        <label for="syncKeyInput">SYNC KEY</label>
+        <input id="syncKeyInput" class="settings-input" type="password" value="${escapeHtml(state.store.settings.syncKey || '')}" placeholder="16+ characters" autocomplete="off">
+      </div>
+      <div class="kv"><span>LAST SYNC</span><strong>${escapeHtml(lastSync)}</strong></div>
+      <button class="terminal-button full" type="button" data-command="sync-now">SYNC NOW</button>
+    </div>
+    <div class="inspector-block">
       <div class="eyebrow">WINDOW</div>
       <button class="terminal-button full" type="button" data-command="desktop">${state.store.settings.desktopMode ? 'DETACH FROM DESKTOP' : 'ATTACH TO DESKTOP'}</button>
+      <button class="terminal-button full" type="button" data-command="desktop-size">DESKTOP SIZE${desktopSizeLabel()}</button>
+      <div class="desktop-size-panel${state.showDesktopSize ? '' : ' hidden'}" data-desktop-size>
+        <div class="size-grid">
+          <label>X<input id="deskX" class="settings-input" type="number" value="${bounds.x}"></label>
+          <label>Y<input id="deskY" class="settings-input" type="number" value="${bounds.y}"></label>
+          <label>W<input id="deskW" class="settings-input" type="number" value="${bounds.width}"></label>
+          <label>H<input id="deskH" class="settings-input" type="number" value="${bounds.height}"></label>
+        </div>
+        <div class="size-presets">
+          <button class="terminal-button" type="button" data-preset="full">FULL</button>
+          <button class="terminal-button" type="button" data-preset="right">RIGHT 1/2</button>
+          <button class="terminal-button" type="button" data-preset="left">LEFT 1/2</button>
+        </div>
+        <button class="terminal-button full" type="button" data-command="desktop-apply">APPLY SIZE</button>
+        <p class="muted">${screenBounds ? `SCREEN ${screenBounds.width} x ${screenBounds.height}` : ''}</p>
+      </div>
     </div>
   `;
 
@@ -439,7 +463,96 @@ function renderSettingsInspector() {
     applySurfaceOpacity(next);
     await persist();
   });
+
+  const syncUrl = els.inspector.querySelector('#syncUrlInput');
+  const syncKey = els.inspector.querySelector('#syncKeyInput');
+  syncUrl.addEventListener('blur', () => updateSyncSetting('syncUrl', syncUrl.value));
+  syncKey.addEventListener('blur', () => updateSyncSetting('syncKey', syncKey.value));
+  els.inspector.querySelector('[data-command="sync-now"]').addEventListener('click', syncNow);
   els.inspector.querySelector('[data-command="desktop"]').addEventListener('click', () => setDesktopMode(!state.store.settings.desktopMode));
+
+  els.inspector.querySelector('[data-command="desktop-size"]').addEventListener('click', () => {
+    state.showDesktopSize = !state.showDesktopSize;
+    renderInspector();
+  });
+
+  const sizeFields = {
+    x: els.inspector.querySelector('#deskX'),
+    y: els.inspector.querySelector('#deskY'),
+    width: els.inspector.querySelector('#deskW'),
+    height: els.inspector.querySelector('#deskH')
+  };
+
+  for (const button of els.inspector.querySelectorAll('[data-preset]')) {
+    button.addEventListener('click', () => {
+      const screen = state.displayBounds || fallback;
+      const half = Math.round(screen.width / 2);
+      const preset = button.dataset.preset;
+      const next = preset === 'right'
+        ? { x: screen.x + half, y: screen.y, width: screen.width - half, height: screen.height }
+        : preset === 'left'
+          ? { x: screen.x, y: screen.y, width: half, height: screen.height }
+          : { x: screen.x, y: screen.y, width: screen.width, height: screen.height };
+      sizeFields.x.value = next.x;
+      sizeFields.y.value = next.y;
+      sizeFields.width.value = next.width;
+      sizeFields.height.value = next.height;
+    });
+  }
+
+  els.inspector.querySelector('[data-command="desktop-apply"]').addEventListener('click', applyDesktopSize);
+}
+
+async function applyDesktopSize() {
+  const read = (id) => Math.round(Number(els.inspector.querySelector(id).value));
+  const next = { x: read('#deskX'), y: read('#deskY'), width: read('#deskW'), height: read('#deskH') };
+  if ([next.x, next.y, next.width, next.height].some((value) => !Number.isFinite(value))) {
+    showToast('Size values must be numbers');
+    return;
+  }
+
+  const screen = state.displayBounds;
+  const isFull = screen
+    && next.x === screen.x && next.y === screen.y
+    && next.width === screen.width && next.height === screen.height;
+  // Storing null for a full-screen box keeps it following the display if it changes.
+  state.store.settings.desktopBounds = isFull ? null : next;
+  await persist();
+
+  // Re-attach so the new box takes effect immediately.
+  if (state.store.settings.desktopMode) {
+    await setDesktopMode(false, { quiet: true });
+    await setDesktopMode(true, { quiet: true });
+    showToast('Desktop size applied');
+  } else {
+    renderInspector();
+    showToast('Desktop size saved');
+  }
+}
+
+async function updateSyncSetting(key, value) {
+  state.store.settings[key] = String(value || '').trim();
+  await persist();
+}
+
+async function syncNow(options = {}) {
+  if (state.syncInFlight || !syncConfigured()) {
+    if (!options.quiet && !syncConfigured()) showToast('Set SYNC URL and SYNC KEY first');
+    return;
+  }
+
+  state.syncInFlight = true;
+  await persist();
+  try {
+    const result = await window.daymark.syncStore(state.store);
+    state.store = result.store || state.store;
+    if (!result.success) state.store.settings.lastSyncError = result.message || 'Sync failed';
+    await persist();
+    renderAll();
+    if (!options.quiet) showToast(result.message || (result.success ? 'Synced' : 'Sync failed'));
+  } finally {
+    state.syncInFlight = false;
+  }
 }
 
 function renderRoadmapInspector() {
@@ -461,8 +574,103 @@ function renderRoadmapInspector() {
   `;
 }
 
+const TASK_ROW_SELECTOR = '.inspector-task[data-task-id], .today-task[data-task-id]';
+
+function taskRowEls() {
+  return [
+    ...els.pageMount.querySelectorAll(TASK_ROW_SELECTOR),
+    ...els.inspector.querySelectorAll(TASK_ROW_SELECTOR)
+  ];
+}
+
+function taskRowById(taskId) {
+  return taskRowEls().find((row) => row.dataset.taskId === taskId) || null;
+}
+
+function isTaskRowFocused() {
+  const active = document.activeElement;
+  return Boolean(active && active.closest && active.closest('[data-task-id]'));
+}
+
+function applyTaskSelection() {
+  const rows = taskRowEls();
+  const stillVisible = rows.some((row) => row.dataset.taskId === state.selectedTaskId);
+  if (!stillVisible) state.selectedTaskId = null;
+  for (const row of rows) {
+    row.classList.toggle('task-selected', row.dataset.taskId === state.selectedTaskId);
+  }
+}
+
+function selectTask(taskId, { focus = false } = {}) {
+  state.selectedTaskId = taskId;
+  applyTaskSelection();
+  if (focus) focusTaskRow(taskId);
+}
+
+function focusTaskRow(taskId) {
+  const row = taskRowById(taskId);
+  if (!row) return;
+  row.tabIndex = -1;
+  row.focus({ preventScroll: false });
+}
+
+function moveTaskSelection(delta) {
+  const rows = taskRowEls();
+  if (!rows.length) return;
+  const index = rows.findIndex((row) => row.dataset.taskId === state.selectedTaskId);
+  const nextIndex = index === -1
+    ? (delta > 0 ? 0 : rows.length - 1)
+    : Math.min(rows.length - 1, Math.max(0, index + delta));
+  selectTask(rows[nextIndex].dataset.taskId, { focus: true });
+}
+
+function handleTaskContainerClick(event) {
+  const row = event.target.closest(TASK_ROW_SELECTOR);
+  if (!row) return;
+  const interactive = event.target.closest('input, textarea, button');
+  selectTask(row.dataset.taskId, { focus: !interactive });
+}
+
+async function deleteSelectedTask() {
+  const taskId = state.selectedTaskId;
+  if (!taskId) return;
+  const rows = taskRowEls();
+  const index = rows.findIndex((row) => row.dataset.taskId === taskId);
+  const nextId = index === -1
+    ? null
+    : (rows[index + 1]?.dataset.taskId ?? rows[index - 1]?.dataset.taskId ?? null);
+
+  removeTask(taskId);
+  state.selectedTaskId = nextId;
+  await persist();
+  renderAll();
+  if (nextId) {
+    requestAnimationFrame(() => focusTaskRow(nextId));
+  } else if (state.inspectorMode === 'date') {
+    focusInspectorDraft();
+  }
+}
+
 function handleGlobalKeydown(event) {
   if (isEditableTarget(event.target)) return;
+
+  if ((event.key === 'Delete' || event.key === 'Backspace') && state.selectedTaskId) {
+    event.preventDefault();
+    deleteSelectedTask();
+    return;
+  }
+
+  if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && isTaskRowFocused()) {
+    event.preventDefault();
+    moveTaskSelection(event.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+
+  if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    seedDemoStore();
+    return;
+  }
 
   if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) {
     const index = Number(event.key) - 1;
@@ -496,6 +704,14 @@ function handleGlobalKeydown(event) {
   selectDate(isoDate(addDays(parseIso(state.selected), delta)));
 }
 
+async function seedDemoStore() {
+  seedDemoData(state.store);
+  state.current = startOfMonth(new Date());
+  state.selected = isoDate(new Date());
+  await persist();
+  renderAll();
+  showToast('Demo data loaded');
+}
 function selectDate(taskDate) {
   state.selected = taskDate;
   if (!visibleDates().includes(taskDate)) {
@@ -614,12 +830,6 @@ async function copySelectedSummary() {
   showToast('?? ?? ??? ??????');
 }
 
-function changeMonth(delta) {
-  state.current = new Date(state.current.getFullYear(), state.current.getMonth() + delta, 1);
-  state.selected = isoDate(state.current);
-  renderAll();
-}
-
 function goToday() {
   selectDate(isoDate(new Date()));
 }
@@ -630,27 +840,21 @@ function applySurfaceOpacity(opacity) {
 }
 
 async function setDesktopMode(enabled, options = {}) {
-  const result = enabled ? await window.daymark.enableDesktop() : await window.daymark.disableDesktop();
+  const result = enabled
+    ? await window.daymark.enableDesktop(state.store.settings.desktopBounds || null)
+    : await window.daymark.disableDesktop();
   if (!result.success) {
     state.store.settings.desktopMode = false;
     await persist();
     if (!options.quiet) showToast(result.message || '???? ?? ??? ??????');
-    updateDesktopButton(false);
-    renderStatusStrip();
-    renderInspector();
+    renderAll();
     return;
   }
 
   state.store.settings.desktopMode = enabled;
   await persist();
-  updateDesktopButton(enabled);
-  renderStatusStrip();
-  renderInspector();
+  renderAll();
   if (!options.quiet) showToast(result.message || (enabled ? '???? ??' : '? ??'));
-}
-
-function updateDesktopButton(enabled) {
-  els.desktopButton.textContent = enabled ? 'WINDOW' : 'DESKTOP';
 }
 
 function startClock() {

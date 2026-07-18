@@ -1,8 +1,8 @@
-const { app, BrowserWindow, ipcMain, clipboard, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard, screen, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const watchFs = require('fs');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 
 const APP_DIR = 'daymark-calendar';
 const DEFAULT_SETTINGS = {
@@ -13,7 +13,9 @@ const DEFAULT_SETTINGS = {
 };
 
 let mainWindow;
+let tray = null;
 let desktopState = null;
+let inputBridge = null;
 let devWatcherStarted = false;
 let devReloadTimer = null;
 
@@ -42,10 +44,11 @@ async function ensureStore() {
       signals: Array.isArray(parsed.signals) ? parsed.signals : [],
       analytics: normalizeAnalytics(parsed.analytics),
       reports: Array.isArray(parsed.reports) ? parsed.reports : [],
+      deleted: Array.isArray(parsed.deleted) ? parsed.deleted : [],
       settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) }
     };
   } catch {
-    const initial = { tasks: [], signals: [], analytics: { days: {} }, reports: [], settings: DEFAULT_SETTINGS };
+    const initial = { tasks: [], signals: [], analytics: { days: {} }, reports: [], deleted: [], settings: DEFAULT_SETTINGS };
     await fs.writeFile(storePath(), JSON.stringify(initial, null, 2), 'utf8');
     return initial;
   }
@@ -55,6 +58,151 @@ async function saveStore(store) {
   await fs.mkdir(dataDir(), { recursive: true });
   await fs.writeFile(storePath(), JSON.stringify(store, null, 2), 'utf8');
   return store;
+}
+
+function syncEndpoint(settings) {
+  const base = String(settings?.syncUrl || '').trim().replace(/\/+$/, '');
+  if (!base) return '';
+  if (base.endsWith('/api/sync')) return base;
+  return `${base}/api/sync`;
+}
+
+function syncRecordsFromStore(store) {
+  const records = [];
+  for (const task of store.tasks || []) {
+    if (!task.id) continue;
+    records.push({
+      collection: 'tasks',
+      recordId: task.id,
+      payload: task,
+      updatedAt: task.updatedAt || task.createdAt || new Date().toISOString()
+    });
+  }
+  for (const signal of store.signals || []) {
+    if (!signal.id) continue;
+    records.push({
+      collection: 'signals',
+      recordId: signal.id,
+      payload: signal,
+      updatedAt: signal.updatedAt || signal.createdAt || new Date().toISOString()
+    });
+  }
+  for (const [dayId, day] of Object.entries(store.analytics?.days || {})) {
+    records.push({
+      collection: 'analytics.days',
+      recordId: dayId,
+      payload: day,
+      updatedAt: day.updatedAt || day.lastSeenAt || `${dayId}T00:00:00.000Z`
+    });
+  }
+  for (const report of store.reports || []) {
+    if (!report.id) continue;
+    records.push({
+      collection: 'reports',
+      recordId: report.id,
+      payload: report,
+      updatedAt: report.updatedAt || report.createdAt || new Date().toISOString()
+    });
+  }
+  for (const item of store.deleted || []) {
+    if (!item.collection || !item.recordId || !item.deletedAt) continue;
+    records.push({
+      collection: item.collection,
+      recordId: item.recordId,
+      payload: null,
+      updatedAt: item.deletedAt,
+      deletedAt: item.deletedAt
+    });
+  }
+  return records;
+}
+
+function newestTimestamp(...values) {
+  return values.filter(Boolean).sort().at(-1) || '';
+}
+
+function recordTimestamp(value) {
+  if (!value) return '';
+  return value.updatedAt || value.lastSeenAt || value.createdAt || '';
+}
+
+function upsertById(items, next) {
+  const index = items.findIndex((item) => item.id === next.id);
+  if (index === -1) {
+    items.push(next);
+    return;
+  }
+  if (recordTimestamp(items[index]) <= recordTimestamp(next)) items[index] = next;
+}
+
+function applyDeleted(store, collection, recordId, deletedAt) {
+  store.deleted ||= [];
+  const existing = store.deleted.find((item) => item.collection === collection && item.recordId === recordId);
+  if (!existing) store.deleted.push({ collection, recordId, deletedAt });
+  else if (String(existing.deletedAt) < String(deletedAt)) existing.deletedAt = deletedAt;
+
+  if (collection === 'tasks') store.tasks = (store.tasks || []).filter((task) => task.id !== recordId);
+  if (collection === 'signals') store.signals = (store.signals || []).filter((signal) => signal.id !== recordId);
+  if (collection === 'reports') store.reports = (store.reports || []).filter((report) => report.id !== recordId);
+  if (collection === 'analytics.days' && store.analytics?.days) delete store.analytics.days[recordId];
+}
+
+function mergeSyncRecords(store, records) {
+  const next = {
+    ...store,
+    tasks: [...(store.tasks || [])],
+    signals: [...(store.signals || [])],
+    reports: [...(store.reports || [])],
+    deleted: [...(store.deleted || [])],
+    analytics: normalizeAnalytics(store.analytics)
+  };
+
+  for (const record of records || []) {
+    if (record.deletedAt) {
+      applyDeleted(next, record.collection, record.recordId, record.deletedAt);
+      continue;
+    }
+    const payload = record.payload;
+    if (!payload) continue;
+    if (record.collection === 'tasks') upsertById(next.tasks, payload);
+    if (record.collection === 'signals') upsertById(next.signals, payload);
+    if (record.collection === 'reports') upsertById(next.reports, payload);
+    if (record.collection === 'analytics.days') {
+      next.analytics.days ||= {};
+      const current = next.analytics.days[record.recordId];
+      if (!current || newestTimestamp(recordTimestamp(current), record.updatedAt) === record.updatedAt) {
+        next.analytics.days[record.recordId] = payload;
+      }
+    }
+  }
+  return next;
+}
+
+async function syncStore(store) {
+  const endpoint = syncEndpoint(store.settings);
+  const syncKey = String(store.settings?.syncKey || '').trim();
+  if (!endpoint || syncKey.length < 16) {
+    return { success: false, message: 'Set SYNC URL and a 16+ character SYNC KEY first.', store };
+  }
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ syncKey, records: syncRecordsFromStore(store) })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body.ok) {
+    return { success: false, message: body.error || `Sync failed: ${response.status}`, store };
+  }
+
+  const merged = mergeSyncRecords(store, body.records || []);
+  merged.settings = {
+    ...store.settings,
+    lastSyncedAt: body.syncedAt || new Date().toISOString(),
+    lastSyncError: ''
+  };
+  await saveStore(merged);
+  return { success: true, message: `Synced ${body.records?.length || 0} records`, store: merged };
 }
 
 function nativeHandle(window) {
@@ -105,13 +253,27 @@ async function runDesktopHost(args) {
   });
 }
 
-async function enableDesktopMode() {
+// A saved size is clamped to the display so a stale or hand-edited value can never
+// push the wallpaper window off screen.
+function resolveDesktopBounds(requested, display) {
+  if (!requested) return display;
+  const width = Math.max(240, Math.min(Math.round(Number(requested.width)) || display.width, display.width));
+  const height = Math.max(180, Math.min(Math.round(Number(requested.height)) || display.height, display.height));
+  const maxX = display.x + display.width - width;
+  const maxY = display.y + display.height - height;
+  const x = Math.max(display.x, Math.min(Math.round(Number(requested.x)) || display.x, maxX));
+  const y = Math.max(display.y, Math.min(Math.round(Number(requested.y)) || display.y, maxY));
+  return { x, y, width, height };
+}
+
+async function enableDesktopMode(requestedBounds) {
   if (process.platform !== 'win32' || !mainWindow) {
     return { success: false, message: 'Windows??? ???? ??? ??? ? ????.' };
   }
 
   const hwnd = nativeHandle(mainWindow);
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
+  const displayBounds = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
+  const display = resolveDesktopBounds(requestedBounds, displayBounds);
   const normalBounds = mainWindow.getBounds();
   mainWindow.setBounds(display);
   mainWindow.setSkipTaskbar(true);
@@ -128,21 +290,61 @@ async function enableDesktopMode() {
   ]);
 
   if (!result.success) {
-    mainWindow.setSkipTaskbar(false);
-    mainWindow.setResizable(true);
-    mainWindow.setMovable(true);
-    mainWindow.setBounds(normalBounds);
-    return { success: false, message: result.message || '???? ?? ??? ??????.' };
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setBounds(display);
+    mainWindow.show();
+    mainWindow.moveBottom?.();
+    desktopState = { mode: 'bottom-window', normalBounds };
+    return { success: true, message: 'WorkerW unavailable; using bottom window mode.' };
   }
 
-  desktopState = { ...(result.data || {}), normalBounds };
+  desktopState = { ...(result.data || {}), mode: 'workerw', normalBounds };
+  startInputBridge(hwnd);
   return { success: true, message: '???? ??? ??????.' };
 }
 
+// Below the icon layer the window gets no mouse input, so a helper process hooks
+// desktop clicks and forwards the ones that miss an icon.
+function startInputBridge(hwnd) {
+  stopInputBridge();
+  const exe = desktopHostPath();
+  try {
+    inputBridge = spawn(exe, ['interact', '--hwnd', String(hwnd)], {
+      windowsHide: true,
+      stdio: 'ignore',
+      detached: false
+    });
+    inputBridge.on('exit', () => { inputBridge = null; });
+    inputBridge.on('error', () => { inputBridge = null; });
+  } catch {
+    inputBridge = null;
+  }
+}
+
+function stopInputBridge() {
+  if (!inputBridge) return;
+  try {
+    inputBridge.kill();
+  } catch {
+    // already gone
+  }
+  inputBridge = null;
+}
+
 async function disableDesktopMode() {
-  return { success: true, message: '? ??? ??????.' };
-  const hwnd = nativeHandle(mainWindow);
+  stopInputBridge();
   const state = desktopState;
+  if (state?.mode === 'bottom-window') {
+    mainWindow.setSkipTaskbar(false);
+    mainWindow.setResizable(true);
+    mainWindow.setMovable(true);
+    if (state.normalBounds) mainWindow.setBounds(state.normalBounds);
+    mainWindow.show();
+    desktopState = null;
+    return { success: true, message: '? ??? ??????.' };
+  }
+
+  const hwnd = nativeHandle(mainWindow);
   const result = await runDesktopHost([
     'detach',
     '--hwnd', String(hwnd),
@@ -224,8 +426,38 @@ function createWindow() {
   startDevWatcher();
 }
 
+// The window is frameless and hides from the taskbar in desktop mode, where it is
+// also click-through (the shell icon layer sits above it). The tray is therefore
+// the only reliable way to get back to window mode, reach settings, or quit.
+function buildTrayMenu() {
+  return Menu.buildFromTemplate([
+    { label: 'Daymark Ops Console', enabled: false },
+    { type: 'separator' },
+    {
+      label: desktopState ? '창 모드로 전환' : '바탕화면 모드로 전환',
+      click: () => mainWindow?.webContents.send('tray:toggle-desktop')
+    },
+    { label: '설정 열기', click: () => mainWindow?.webContents.send('tray:open-settings') },
+    { type: 'separator' },
+    { label: '종료', click: () => app.quit() }
+  ]);
+}
+
+function refreshTrayMenu() {
+  if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu());
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'tray-icon.png'));
+  tray = new Tray(icon);
+  tray.setToolTip('Daymark Ops Console');
+  tray.on('double-click', () => mainWindow?.webContents.send('tray:toggle-desktop'));
+  refreshTrayMenu();
+}
+
 app.whenReady().then(() => {
   createWindow();
+  createTray();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -235,8 +467,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('before-quit', () => {
+  stopInputBridge();
+  if (tray && !tray.isDestroyed()) tray.destroy();
+});
+
 ipcMain.handle('store:load', async () => ensureStore());
 ipcMain.handle('store:save', async (_event, store) => saveStore(store));
+ipcMain.handle('sync:run', async (_event, store) => syncStore(store));
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:toggle-maximize', () => {
   if (!mainWindow || desktopState) return false;
@@ -246,8 +484,20 @@ ipcMain.handle('window:toggle-maximize', () => {
 });
 ipcMain.handle('window:is-maximized', () => Boolean(mainWindow?.isMaximized()));
 ipcMain.handle('window:close', () => mainWindow?.close());
-ipcMain.handle('desktop:enable', () => enableDesktopMode());
-ipcMain.handle('desktop:disable', () => disableDesktopMode());
+ipcMain.handle('desktop:enable', async (_event, bounds) => {
+  const result = await enableDesktopMode(bounds);
+  refreshTrayMenu();
+  return result;
+});
+ipcMain.handle('desktop:display-bounds', () => {
+  if (process.platform !== 'win32') return null;
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
+});
+ipcMain.handle('desktop:disable', async () => {
+  const result = await disableDesktopMode();
+  refreshTrayMenu();
+  return result;
+});
 ipcMain.handle('desktop:is-active', () => Boolean(desktopState));
 ipcMain.handle('clipboard:write', (_event, text) => clipboard.writeText(String(text || '')));
 

@@ -1,8 +1,8 @@
 import { isoDate, monthMatrix, pad2 } from '../utils.js';
 
-const weekdayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const weekdayLabels = ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI'];
 
-export function renderCalendarPage({ mount, current, selected, tasksForDate, changeMonth, goToday, carryIncomplete, selectDate, moveTaskToDate }) {
+export function renderCalendarPage({ mount, current, selected, tasksForDate, goToday, carryIncomplete, selectDate, moveTaskToDate }) {
   const page = document.createElement('section');
   page.className = 'calendar-page';
   page.innerHTML = `
@@ -12,10 +12,8 @@ export function renderCalendarPage({ mount, current, selected, tasksForDate, cha
         <h1>${current.getFullYear()} / ${pad2(current.getMonth() + 1)}</h1>
       </div>
       <div class="panel-actions">
-        <button class="terminal-button" type="button" data-action="prev">PREV</button>
         <button class="terminal-button" type="button" data-action="today">TODAY</button>
         <button class="terminal-button" type="button" data-action="carry">CARRY OPEN</button>
-        <button class="terminal-button" type="button" data-action="next">NEXT</button>
       </div>
     </div>
     <div class="weekday-row"></div>
@@ -23,8 +21,6 @@ export function renderCalendarPage({ mount, current, selected, tasksForDate, cha
   `;
   mount.appendChild(page);
 
-  page.querySelector('[data-action="prev"]').addEventListener('click', () => changeMonth(-1));
-  page.querySelector('[data-action="next"]').addEventListener('click', () => changeMonth(1));
   page.querySelector('[data-action="today"]').addEventListener('click', goToday);
   page.querySelector('[data-action="carry"]').addEventListener('click', carryIncomplete);
 

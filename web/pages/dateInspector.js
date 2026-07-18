@@ -76,7 +76,18 @@ function renderInspectorTaskRow(task, actions) {
   });
   input.addEventListener('blur', () => actions.commitExisting(task, input.value));
 
-  row.append(check, input);
+  const remove = document.createElement('button');
+  remove.className = 'task-delete';
+  remove.type = 'button';
+  remove.title = 'Delete task';
+  remove.textContent = 'DEL';
+  remove.addEventListener('click', async () => {
+    actions.removeTask(task.id);
+    await actions.persist();
+    actions.renderAll();
+  });
+
+  row.append(check, input, remove);
   return row;
 }
 

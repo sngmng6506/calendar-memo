@@ -3,7 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('daymark', {
   loadStore: () => ipcRenderer.invoke('store:load'),
   saveStore: (store) => ipcRenderer.invoke('store:save', store),
-  enableDesktop: () => ipcRenderer.invoke('desktop:enable'),
+  syncStore: (store) => ipcRenderer.invoke('sync:run', store),
+  enableDesktop: (bounds) => ipcRenderer.invoke('desktop:enable', bounds),
+  displayBounds: () => ipcRenderer.invoke('desktop:display-bounds'),
   disableDesktop: () => ipcRenderer.invoke('desktop:disable'),
   isDesktopActive: () => ipcRenderer.invoke('desktop:is-active'),
   minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -13,5 +15,11 @@ contextBridge.exposeInMainWorld('daymark', {
     ipcRenderer.on('window:maximized-change', (_event, value) => callback(Boolean(value)));
   },
   close: () => ipcRenderer.invoke('window:close'),
+  onTrayToggleDesktop: (callback) => {
+    ipcRenderer.on('tray:toggle-desktop', () => callback());
+  },
+  onTrayOpenSettings: (callback) => {
+    ipcRenderer.on('tray:open-settings', () => callback());
+  },
   copy: (text) => ipcRenderer.invoke('clipboard:write', text)
 });

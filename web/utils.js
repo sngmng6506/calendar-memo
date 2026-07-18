@@ -23,8 +23,10 @@ export function parseIso(value) {
 
 export function monthMatrix(monthDate) {
   const first = startOfMonth(monthDate);
-  const mondayIndex = (first.getDay() + 6) % 7;
-  const start = addDays(first, -mondayIndex);
+  // Weeks start on Saturday (SAT SUN MON ... FRI) so the light weekend columns
+  // sit on the left, where desktop icons usually crowd the screen.
+  const saturdayIndex = (first.getDay() + 1) % 7;
+  const start = addDays(first, -saturdayIndex);
   return Array.from({ length: 42 }, (_, index) => addDays(start, index));
 }
 

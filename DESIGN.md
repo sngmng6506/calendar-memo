@@ -28,6 +28,7 @@ Use the CSS variables in `web/styles.css` as the source of truth.
 --clock-d2: rgba(138, 255, 211, 0.38);
 --clock-d3: rgba(138, 255, 211, 0.66);
 --clock-d4: #8affd3;
+--clock-avg: rgba(215, 247, 238, 0.20);
 --cyan: #78d7ff;
 --warn: #ffd166;
 --danger: #ff6b7a;
