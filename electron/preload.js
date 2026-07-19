@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('daymark', {
   syncStore: (store) => ipcRenderer.invoke('sync:run', store),
   enableDesktop: (bounds) => ipcRenderer.invoke('desktop:enable', bounds),
   displayBounds: () => ipcRenderer.invoke('desktop:display-bounds'),
+  getAutoStart: () => ipcRenderer.invoke('app:get-auto-start'),
+  setAutoStart: (enabled) => ipcRenderer.invoke('app:set-auto-start', enabled),
   windowBounds: () => ipcRenderer.invoke('window:bounds'),
   setWindowBounds: (bounds) => ipcRenderer.invoke('window:set-bounds', bounds),
   disableDesktop: () => ipcRenderer.invoke('desktop:disable'),

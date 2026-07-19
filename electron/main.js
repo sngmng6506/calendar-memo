@@ -554,6 +554,24 @@ ipcMain.handle('desktop:enable', async (_event, bounds) => {
   refreshTrayMenu();
   return result;
 });
+// Launching at login has to point at this app explicitly: when unpackaged,
+// process.execPath is Electron itself and would otherwise start with no app.
+function loginItemOptions(enabled) {
+  const options = { openAtLogin: enabled, path: process.execPath };
+  if (!app.isPackaged) options.args = [app.getAppPath()];
+  return options;
+}
+
+ipcMain.handle('app:get-auto-start', () => {
+  if (process.platform !== 'win32') return false;
+  return Boolean(app.getLoginItemSettings(loginItemOptions(true)).openAtLogin);
+});
+ipcMain.handle('app:set-auto-start', (_event, enabled) => {
+  if (process.platform !== 'win32') return false;
+  app.setLoginItemSettings(loginItemOptions(Boolean(enabled)));
+  return Boolean(app.getLoginItemSettings(loginItemOptions(true)).openAtLogin);
+});
+
 ipcMain.handle('window:bounds', () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null));
 ipcMain.handle('window:set-bounds', (_event, bounds) => {
   if (!mainWindow || mainWindow.isDestroyed() || !bounds) return null;

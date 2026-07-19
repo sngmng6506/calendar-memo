@@ -46,6 +46,7 @@ const state = {
   inspectorMode: 'date',
   selectedTaskId: null,
   displayBounds: null,
+  autoStart: false,
   adjustingDesktopSize: false,
   resumeDesktopAfterAdjust: false,
   toastTimer: null,
@@ -61,6 +62,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindElements();
   state.store = await window.daymark.loadStore();
   state.displayBounds = await window.daymark.displayBounds?.().catch(() => null);
+  state.autoStart = Boolean(await window.daymark.getAutoStart?.().catch(() => false));
   applySurfaceOpacity(Number(state.store.settings.windowOpacity ?? 0.86));
   bindActions();
   startAnalyticsTracking();
@@ -445,6 +447,7 @@ function renderSettingsInspector() {
       <div class="eyebrow">WINDOW</div>
       <button class="terminal-button full" type="button" data-command="desktop">${state.store.settings.desktopMode ? 'DETACH FROM DESKTOP' : 'ATTACH TO DESKTOP'}</button>
       <button class="terminal-button full" type="button" data-command="desktop-drag">DRAG TO RESIZE${desktopSizeLabel()}</button>
+      <button class="terminal-button full${state.autoStart ? ' active' : ''}" type="button" data-command="auto-start">START WITH WINDOWS [${state.autoStart ? 'ON' : 'OFF'}]</button>
       <p class="muted">${screenBounds ? `SCREEN ${screenBounds.width} x ${screenBounds.height}` : ''}</p>
     </div>
   `;
@@ -467,6 +470,20 @@ function renderSettingsInspector() {
   els.inspector.querySelector('[data-command="desktop"]').addEventListener('click', () => setDesktopMode(!state.store.settings.desktopMode));
 
   els.inspector.querySelector('[data-command="desktop-drag"]').addEventListener('click', startDesktopSizeAdjust);
+  els.inspector.querySelector('[data-command="auto-start"]').addEventListener('click', toggleAutoStart);
+}
+
+// Auto-start lives in the Windows registry rather than the store, so read the real
+// value back instead of assuming the write succeeded.
+async function toggleAutoStart() {
+  const next = !state.autoStart;
+  state.autoStart = Boolean(await window.daymark.setAutoStart?.(next));
+  renderInspector();
+  if (state.autoStart === next) {
+    showToast(next ? 'Starts with Windows' : 'Auto start off');
+  } else {
+    showToast('Could not change auto start');
+  }
 }
 
 // Keep a box on screen so what gets saved matches what the attach will actually use.
@@ -725,6 +742,8 @@ async function deleteSelectedTask() {
 
 function handleGlobalKeydown(event) {
   if (isEditableTarget(event.target)) return;
+  // A focused button still owns its activation keys; everything else is ours.
+  if (isButtonTarget(event.target) && (event.key === 'Enter' || event.key === ' ')) return;
 
   if ((event.key === 'Delete' || event.key === 'Backspace') && state.selectedTaskId) {
     event.preventDefault();
@@ -944,9 +963,15 @@ function focusInspectorDraft() {
   });
 }
 
+// Only text entry should swallow shortcuts. A focused button used to count here,
+// which killed every shortcut until the user clicked elsewhere.
 function isEditableTarget(target) {
   if (!(target instanceof HTMLElement)) return false;
-  return ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable;
+}
+
+function isButtonTarget(target) {
+  return target instanceof HTMLElement && target.tagName === 'BUTTON';
 }
 
 async function persist() {
