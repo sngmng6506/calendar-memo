@@ -32,7 +32,9 @@ export function renderAnalyticsPage({ mount, analyticsDay, store }) {
 }
 
 export function renderActiveClock(container, bins, activeSeconds = 0, averageBins = []) {
-  const size = 340;
+  // The 7-day average ring reaches r=220 (see renderAveragePath), so the box has
+  // to clear 220 from the centre or that path gets clipped.
+  const size = 460;
   const center = size / 2;
   const max = Math.max(0, ...bins, ...averageBins);
   const total = Number(activeSeconds || 0);

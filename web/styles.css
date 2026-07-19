@@ -89,7 +89,6 @@ body.is-maximized .ops-shell {
   background: var(--bg);
 }
 body.is-maximized .topbar,
-body.is-maximized .status-strip,
 body.is-maximized .main-panel,
 body.is-maximized .inspector {
   border-left: 0;
@@ -108,7 +107,7 @@ body.desktop-mode .ops-shell {
   height: 100vh;
   padding: 14px;
   display: grid;
-  grid-template-rows: 42px 34px 1fr;
+  grid-template-rows: 42px 1fr;
   gap: 10px;
   background: rgba(0,0,0, calc(0.05 * var(--surface-alpha)));
   backdrop-filter: blur(10px);
@@ -116,7 +115,6 @@ body.desktop-mode .ops-shell {
 }
 
 .topbar,
-.status-strip,
 .main-panel,
 .inspector {
   border: 1px solid var(--line);
@@ -128,32 +126,21 @@ body.desktop-mode .ops-shell {
   display: grid;
   /* Everything clusters on the right: desktop icons crowd the left edge, so the
      flexible drag area absorbs the space there instead. */
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   min-width: 0;
   -webkit-app-region: drag;
 }
-.drag-zone {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 12px;
-  color: var(--muted);
-  font-size: 12px;
-  min-width: 0;
-}
-.system-id { color: var(--accent); font-weight: 800; }
-.system-clock { color: var(--faint); }
 
-.page-tabs,
-.window-actions {
+/* SETTINGS is just another tab, so it shares the row and the same 6px rhythm. */
+.topbar-controls,
+.page-tabs {
   display: flex;
   align-items: center;
   gap: 6px;
   -webkit-app-region: no-drag;
 }
-.window-actions { justify-content: flex-end; padding-right: 8px; }
+.topbar-controls { padding-right: 8px; }
 
 .page-tab,
 .terminal-button,
@@ -174,13 +161,18 @@ body.desktop-mode .ops-shell {
 .terminal-icon { width: 28px; padding: 0; }
 .danger:hover { color: var(--danger); border-color: rgba(255,107,122,0.55); }
 
+/* Sits inline in the topbar, sized to its content so the whole cluster stays
+   right-aligned away from the desktop icons. */
 .status-strip {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   padding: 0 10px;
-  gap: 8px;
+  gap: 14px;
   font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-app-region: drag;
 }
 .status-item { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .status-item span { color: var(--faint); margin-right: 5px; }
@@ -192,10 +184,10 @@ body.desktop-mode .ops-shell {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 10px;
 }
-body.analytics-mode .workspace {
+body.analytics-mode:not(.settings-open) .workspace {
   grid-template-columns: minmax(0, 1fr);
 }
-body.analytics-mode .inspector {
+body.analytics-mode:not(.settings-open) .inspector {
   display: none !important;
 }
 .main-panel,.inspector { min-height: 0; overflow: hidden; }
@@ -343,19 +335,53 @@ body.analytics-mode .inspector {
 .inspector { padding: 12px; overflow: auto; }
 .inspector-block { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
 
-.desktop-size-panel { margin-top: 8px; display: grid; gap: 8px; }
-.desktop-size-panel.hidden { display: none; }
-.size-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.size-grid label {
-  display: grid;
-  gap: 3px;
-  font-size: 10px;
-  color: var(--muted);
-  letter-spacing: 0.08em;
+/* Frameless windows only expose a few pixels of OS resize border, so while the
+   desktop box is being adjusted we draw our own generous grab zones. */
+.resize-handles { position: fixed; inset: 0; z-index: 55; pointer-events: none; }
+.resize-handles.hidden { display: none; }
+.resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  background: rgba(138, 255, 211, 0.10);
+  -webkit-app-region: no-drag;
 }
-.size-grid .settings-input { width: 100%; min-width: 0; text-align: right; }
-.size-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.size-presets .terminal-button { padding: 0 4px; font-size: 10px; }
+.resize-handle:hover { background: rgba(138, 255, 211, 0.28); }
+
+.resize-handle[data-dir="n"], .resize-handle[data-dir="s"] { left: 26px; right: 26px; height: 16px; cursor: ns-resize; }
+.resize-handle[data-dir="n"] { top: 0; }
+.resize-handle[data-dir="s"] { bottom: 0; }
+.resize-handle[data-dir="w"], .resize-handle[data-dir="e"] { top: 26px; bottom: 26px; width: 16px; cursor: ew-resize; }
+.resize-handle[data-dir="w"] { left: 0; }
+.resize-handle[data-dir="e"] { right: 0; }
+
+.resize-handle[data-dir="nw"], .resize-handle[data-dir="ne"],
+.resize-handle[data-dir="sw"], .resize-handle[data-dir="se"] {
+  width: 28px;
+  height: 28px;
+  background: rgba(138, 255, 211, 0.22);
+}
+.resize-handle[data-dir="nw"] { top: 0; left: 0; cursor: nwse-resize; }
+.resize-handle[data-dir="ne"] { top: 0; right: 0; cursor: nesw-resize; }
+.resize-handle[data-dir="sw"] { bottom: 0; left: 0; cursor: nesw-resize; }
+.resize-handle[data-dir="se"] { bottom: 0; right: 0; cursor: nwse-resize; }
+
+.size-adjust-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  background: rgba(6, 12, 10, 0.96);
+  color: var(--text);
+  font-size: 11px;
+  -webkit-app-region: no-drag;
+}
+
 .inspector-block:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 .kv { display: grid; grid-template-columns: 104px 1fr; gap: 8px; font-size: 11px; margin: 7px 0; }
 .kv span { color: var(--faint); }
@@ -476,12 +502,12 @@ body.analytics-mode .inspector {
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: 8px;
+  padding: 4px;
 }
 .active-clock svg {
-  width: min(90%, 320px);
-  height: min(90%, 320px);
-  overflow: hidden;
+  width: min(100%, 460px);
+  height: min(100%, 460px);
+  overflow: visible;
 }
 .recent-completion {
   min-height: 0;
@@ -946,15 +972,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   font-size: 12px;
 }
 .hidden { display: none !important; }
-
-@media (max-width: 980px) {
-  .topbar { grid-template-columns: 1fr; height: auto; gap: 8px; padding: 8px; }
-  .ops-shell { grid-template-rows: auto auto 1fr; }
-  .drag-zone, .page-tabs, .window-actions { justify-content: center; flex-wrap: wrap; }
-  .status-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); height: auto; padding: 8px 10px; }
-  .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 260px; }
-  body.analytics-mode .workspace { grid-template-rows: minmax(0, 1fr); }
-}
 
 /* Pure terminal TODAY */
 .simple-today-page .today-single-list {

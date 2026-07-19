@@ -53,6 +53,9 @@ static class Program
                 case "interact":
                     Interact(args);
                     return 0;
+                case "status":
+                    Status(args);
+                    return 0;
                 default:
                     WriteFailure($"알 수 없는 명령입니다: {args[0]}");
                     return 0;
@@ -133,6 +136,32 @@ static class Program
         if (exStyle != 0) SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr(exStyle));
         SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpNoActivate | SwpNoSize | SwpNoMove | SwpFrameChanged | SwpNoSendChanging);
         WriteSuccess(new { });
+    }
+
+    // Changing the wallpaper (or restarting Explorer) makes the shell rebuild the
+    // wallpaper WorkerW, which orphans anything parented to the old one. The app
+    // polls this to notice and re-attach.
+    private static void Status(string[] args)
+    {
+        var values = ParseArgs(args);
+        var hwnd = ReadHandle(values, "hwnd");
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd))
+        {
+            WriteFailure("Electron 창 핸들을 찾지 못했습니다.");
+            return;
+        }
+
+        var parent = GetParent(hwnd);
+        var wallpaper = FindWorkerWBehindIcons();
+        var attached = parent != IntPtr.Zero && IsWindow(parent) && parent == wallpaper;
+
+        WriteSuccess(new
+        {
+            attached,
+            parent = parent.ToInt64(),
+            parentClass = parent == IntPtr.Zero ? "" : ClassName(parent),
+            wallpaper = wallpaper.ToInt64()
+        });
     }
 
     private static void Probe()

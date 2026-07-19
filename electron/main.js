@@ -16,6 +16,9 @@ let mainWindow;
 let tray = null;
 let desktopState = null;
 let inputBridge = null;
+let attachWatchdog = null;
+let reattaching = false;
+let quitting = false;
 let devWatcherStarted = false;
 let devReloadTimer = null;
 
@@ -257,8 +260,10 @@ async function runDesktopHost(args) {
 // push the wallpaper window off screen.
 function resolveDesktopBounds(requested, display) {
   if (!requested) return display;
-  const width = Math.max(240, Math.min(Math.round(Number(requested.width)) || display.width, display.width));
-  const height = Math.max(180, Math.min(Math.round(Number(requested.height)) || display.height, display.height));
+  // Keep the floor in step with the window's minimum size, otherwise a saved box
+  // smaller than that would be silently grown and stop matching what was stored.
+  const width = Math.max(980, Math.min(Math.round(Number(requested.width)) || display.width, display.width));
+  const height = Math.max(650, Math.min(Math.round(Number(requested.height)) || display.height, display.height));
   const maxX = display.x + display.width - width;
   const maxY = display.y + display.height - height;
   const x = Math.max(display.x, Math.min(Math.round(Number(requested.x)) || display.x, maxX));
@@ -298,14 +303,50 @@ async function enableDesktopMode(requestedBounds) {
     return { success: true, message: 'WorkerW unavailable; using bottom window mode.' };
   }
 
-  desktopState = { ...(result.data || {}), mode: 'workerw', normalBounds };
+  desktopState = { ...(result.data || {}), mode: 'workerw', normalBounds, appliedBounds: display };
   startInputBridge(hwnd);
+  startAttachWatchdog();
   return { success: true, message: '???? ??? ??????.' };
+}
+
+// The shell rebuilds the wallpaper WorkerW whenever the background changes (or
+// Explorer restarts), which silently orphans our window. Watch for that and
+// re-attach with the same box.
+function startAttachWatchdog() {
+  stopAttachWatchdog();
+  attachWatchdog = setInterval(verifyDesktopAttachment, 4000);
+}
+
+function stopAttachWatchdog() {
+  if (!attachWatchdog) return;
+  clearInterval(attachWatchdog);
+  attachWatchdog = null;
+}
+
+async function verifyDesktopAttachment() {
+  if (reattaching || desktopState?.mode !== 'workerw') return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const hwnd = nativeHandle(mainWindow);
+  const status = await runDesktopHost(['status', '--hwnd', String(hwnd)]);
+  if (status.success && status.data?.attached) return;
+
+  reattaching = true;
+  try {
+    const bounds = desktopState?.appliedBounds;
+    const normalBounds = desktopState?.normalBounds;
+    await enableDesktopMode(bounds);
+    // enableDesktopMode captures the current (already desktop-sized) bounds as the
+    // restore point, so keep the original one from before desktop mode.
+    if (desktopState && normalBounds) desktopState.normalBounds = normalBounds;
+  } finally {
+    reattaching = false;
+  }
 }
 
 // Below the icon layer the window gets no mouse input, so a helper process hooks
 // desktop clicks and forwards the ones that miss an icon.
-function startInputBridge(hwnd) {
+function startInputBridge(hwnd, attempt = 0) {
   stopInputBridge();
   const exe = desktopHostPath();
   try {
@@ -314,7 +355,16 @@ function startInputBridge(hwnd) {
       stdio: 'ignore',
       detached: false
     });
-    inputBridge.on('exit', () => { inputBridge = null; });
+    inputBridge.on('exit', () => {
+      inputBridge = null;
+      // Losing the bridge while still attached leaves the window click-through
+      // with no way back, so bring it up again (bounded, in case it cannot start).
+      if (desktopState?.mode === 'workerw' && attempt < 3) {
+        setTimeout(() => {
+          if (!inputBridge && desktopState?.mode === 'workerw') startInputBridge(hwnd, attempt + 1);
+        }, 1000);
+      }
+    });
     inputBridge.on('error', () => { inputBridge = null; });
   } catch {
     inputBridge = null;
@@ -332,6 +382,7 @@ function stopInputBridge() {
 }
 
 async function disableDesktopMode() {
+  stopAttachWatchdog();
   stopInputBridge();
   const state = desktopState;
   if (state?.mode === 'bottom-window') {
@@ -403,6 +454,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: Math.min(1320, primary.width),
     height: Math.min(860, primary.height),
+    // The layout is built for a wide window and has no narrow fallback, so keep
+    // the floor at the width it is designed for.
     minWidth: 980,
     minHeight: 650,
     frame: false,
@@ -439,7 +492,7 @@ function buildTrayMenu() {
     },
     { label: '설정 열기', click: () => mainWindow?.webContents.send('tray:open-settings') },
     { type: 'separator' },
-    { label: '종료', click: () => app.quit() }
+    { label: '종료', click: () => { quitting = true; app.quit(); } }
   ]);
 }
 
@@ -464,10 +517,22 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // Our window is a child of the wallpaper WorkerW, so when the shell rebuilds
+  // that layer (wallpaper change, Explorer restart) it destroys our window too.
+  // Rebuild instead of exiting; the renderer re-applies desktop mode on load.
+  if (!quitting && desktopState) {
+    desktopState = null;
+    stopAttachWatchdog();
+    stopInputBridge();
+    createWindow();
+    return;
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
+  quitting = true;
+  stopAttachWatchdog();
   stopInputBridge();
   if (tray && !tray.isDestroyed()) tray.destroy();
 });
@@ -488,6 +553,13 @@ ipcMain.handle('desktop:enable', async (_event, bounds) => {
   const result = await enableDesktopMode(bounds);
   refreshTrayMenu();
   return result;
+});
+ipcMain.handle('window:bounds', () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null));
+ipcMain.handle('window:set-bounds', (_event, bounds) => {
+  if (!mainWindow || mainWindow.isDestroyed() || !bounds) return null;
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
+  mainWindow.setBounds(resolveDesktopBounds(bounds, display));
+  return mainWindow.getBounds();
 });
 ipcMain.handle('desktop:display-bounds', () => {
   if (process.platform !== 'win32') return null;

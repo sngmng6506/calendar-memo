@@ -10,16 +10,12 @@
     <main class="ops-shell">
       <header class="topbar">
         <div class="title-drag-handle" aria-hidden="true"></div>
-        <div class="drag-zone">
-          <div id="systemClock" class="system-clock"></div>
-        </div>
-        <nav id="pageTabs" class="page-tabs" aria-label="Pages"></nav>
-        <div class="window-actions">
-          <button id="settingsButton" class="terminal-button">SETTINGS</button>
+        <div class="status-strip" id="statusStrip"></div>
+        <div class="topbar-controls">
+          <nav id="pageTabs" class="page-tabs" aria-label="Pages"></nav>
+          <button id="settingsButton" class="page-tab">SETTINGS</button>
         </div>
       </header>
-
-      <section class="status-strip" id="statusStrip"></section>
 
       <section class="workspace">
         <section class="main-panel">
@@ -28,6 +24,8 @@
         <aside class="inspector" id="inspector"></aside>
       </section>
 
+      <div id="resizeHandles" class="resize-handles hidden" aria-hidden="true"></div>
+      <div id="sizeAdjustBar" class="size-adjust-bar hidden"></div>
       <div id="toast" class="toast hidden"></div>
     </main>
     <script type="module" src="app.js"></script>

@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:DAYMARK_DEV='1'; electron .\"",
-    "check": "node --check electron/main.js && node --check electron/preload.js && node --check server/sync-server.js && node --check web/utils.js && node --check web/tasks.js && node --check web/devSeed.js && node --check web/pages/calendar.js && node --check web/pages/dateInspector.js && node --check web/pages/today.js && node --check web/pages/analytics.js && node --check web/pages/log.js && node --check web/pages/signals.js && node --check web/app.js",
+    "check": "node --check electron/main.js && node --check electron/preload.js && node --check server/sync-server.js && node --check web/utils.js && node --check web/tasks.js && node --check web/devSeed.js && node --check web/pages/calendar.js && node --check web/pages/dateInspector.js && node --check web/pages/today.js && node --check web/pages/analytics.js && node --check web/app.js",
     "build:desktop-host": "powershell -ExecutionPolicy Bypass -File scripts/build-desktop-host.ps1",
     "start:app": "electron .",
     "server": "node server/sync-server.js"

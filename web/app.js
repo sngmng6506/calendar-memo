@@ -46,9 +46,9 @@ const state = {
   inspectorMode: 'date',
   selectedTaskId: null,
   displayBounds: null,
-  showDesktopSize: false,
+  adjustingDesktopSize: false,
+  resumeDesktopAfterAdjust: false,
   toastTimer: null,
-  clockTimer: null,
   analyticsTimer: null,
   syncTimer: null,
   syncInFlight: false,
@@ -63,16 +63,22 @@ window.addEventListener('DOMContentLoaded', async () => {
   state.displayBounds = await window.daymark.displayBounds?.().catch(() => null);
   applySurfaceOpacity(Number(state.store.settings.windowOpacity ?? 0.86));
   bindActions();
-  startClock();
   startAnalyticsTracking();
   startSyncTracking();
   renderAll();
+
+  // The setting survives a restart but the native attach does not, so re-apply it
+  // here. Otherwise the UI claims desktop mode while the window is still floating
+  // and the input bridge never starts.
+  if (state.store.settings.desktopMode) {
+    await setDesktopMode(true, { quiet: true });
+  }
 });
 
 function bindElements() {
   for (const id of [
-    'pageTabs', 'systemClock', 'statusStrip', 'pageMount', 'inspector',
-    'settingsButton', 'toast'
+    'pageTabs', 'statusStrip', 'pageMount', 'inspector',
+    'settingsButton', 'toast', 'sizeAdjustBar', 'resizeHandles'
   ]) {
     els[id] = document.getElementById(id);
   }
@@ -80,8 +86,10 @@ function bindElements() {
 
 function bindActions() {
   els.settingsButton.addEventListener('click', () => {
-    state.inspectorMode = state.inspectorMode === 'settings' ? 'date' : 'settings';
-    renderInspector();
+    state.inspectorMode = state.inspectorMode === 'settings'
+      ? (state.page === 'calendar' ? 'date' : state.page)
+      : 'settings';
+    renderAll();
   });
   window.daymark.onTrayToggleDesktop?.(() => {
     setDesktopMode(!state.store.settings.desktopMode);
@@ -90,7 +98,7 @@ function bindActions() {
     // Desktop mode is click-through, so drop back to a window before showing settings.
     if (state.store.settings.desktopMode) await setDesktopMode(false);
     state.inspectorMode = 'settings';
-    renderInspector();
+    renderAll();
   });
   els.pageMount.addEventListener('click', handleTaskContainerClick);
   els.inspector.addEventListener('click', handleTaskContainerClick);
@@ -119,11 +127,16 @@ function syncConfigured() {
 function renderAll() {
   document.body.classList.toggle('analytics-mode', state.page === 'analytics');
   document.body.classList.toggle('desktop-mode', Boolean(state.store.settings.desktopMode));
+  // Analytics normally runs full width with no inspector, but settings live there,
+  // so the panel has to come back while it is open.
+  document.body.classList.toggle('settings-open', state.inspectorMode === 'settings');
   renderTabs();
   renderStatusStrip();
   renderPage();
   renderInspector();
   applyTaskSelection();
+  renderSizeAdjustBar();
+  renderResizeHandles();
 }
 
 function renderTabs() {
@@ -148,16 +161,14 @@ function renderStatusStrip() {
   const open = monthTasks.length - done;
   const selectedTasks = tasksForDate(state.selected);
   const carry = state.store.tasks.filter((task) => task.taskDate < isoDate(new Date()) && !task.completed).length;
+  // PAGE / MONTH / SELECTED are omitted: the active tab, the calendar heading and
+  // the inspector title already show them.
   const rows = [
-    ['PAGE', activePage().label],
-    ['MONTH', `${state.current.getFullYear()}-${pad2(state.current.getMonth() + 1)}`],
-    ['SELECTED', state.selected],
     ['TASKS', String(monthTasks.length)],
     ['DONE', String(done)],
     ['OPEN', String(open)],
     ['SELECTED OPEN', String(selectedTasks.filter((task) => !task.completed).length)],
-    ['CARRY', String(carry)],
-    ['MODE', state.store.settings.desktopMode ? 'DESKTOP' : 'WINDOW']
+    ['CARRY', String(carry)]
   ];
 
   els.statusStrip.innerHTML = '';
@@ -241,6 +252,7 @@ function renderPlaceholderPage(title, description) {
 }
 
 function renderInspector() {
+  els.settingsButton.classList.toggle('active', state.inspectorMode === 'settings');
   if (state.inspectorMode === 'settings') {
     renderSettingsInspector();
     return;
@@ -407,8 +419,6 @@ function renderSettingsInspector() {
   const opacity = Number(state.store.settings.windowOpacity ?? 0.86);
   const lastSync = state.store.settings.lastSyncedAt || 'never';
   const screenBounds = state.displayBounds;
-  const fallback = screenBounds || { x: 0, y: 0, width: 1920, height: 1080 };
-  const bounds = state.store.settings.desktopBounds || fallback;
   els.inspector.innerHTML = `
     <div class="inspector-block">
       <div class="eyebrow">SETTINGS</div>
@@ -417,7 +427,6 @@ function renderSettingsInspector() {
         <label for="opacityRange">BACKGROUND ALPHA <strong id="opacityValue">${Math.round(opacity * 100)}%</strong></label>
         <input id="opacityRange" type="range" min="0" max="1" step="0.01" value="${opacity}">
       </div>
-      <p class="muted">?? ???? ?????. ?? ?, ??, ?? ??? ???? ?????.</p>
     </div>
     <div class="inspector-block">
       <div class="eyebrow">SYNC</div>
@@ -435,22 +444,8 @@ function renderSettingsInspector() {
     <div class="inspector-block">
       <div class="eyebrow">WINDOW</div>
       <button class="terminal-button full" type="button" data-command="desktop">${state.store.settings.desktopMode ? 'DETACH FROM DESKTOP' : 'ATTACH TO DESKTOP'}</button>
-      <button class="terminal-button full" type="button" data-command="desktop-size">DESKTOP SIZE${desktopSizeLabel()}</button>
-      <div class="desktop-size-panel${state.showDesktopSize ? '' : ' hidden'}" data-desktop-size>
-        <div class="size-grid">
-          <label>X<input id="deskX" class="settings-input" type="number" value="${bounds.x}"></label>
-          <label>Y<input id="deskY" class="settings-input" type="number" value="${bounds.y}"></label>
-          <label>W<input id="deskW" class="settings-input" type="number" value="${bounds.width}"></label>
-          <label>H<input id="deskH" class="settings-input" type="number" value="${bounds.height}"></label>
-        </div>
-        <div class="size-presets">
-          <button class="terminal-button" type="button" data-preset="full">FULL</button>
-          <button class="terminal-button" type="button" data-preset="right">RIGHT 1/2</button>
-          <button class="terminal-button" type="button" data-preset="left">LEFT 1/2</button>
-        </div>
-        <button class="terminal-button full" type="button" data-command="desktop-apply">APPLY SIZE</button>
-        <p class="muted">${screenBounds ? `SCREEN ${screenBounds.width} x ${screenBounds.height}` : ''}</p>
-      </div>
+      <button class="terminal-button full" type="button" data-command="desktop-drag">DRAG TO RESIZE${desktopSizeLabel()}</button>
+      <p class="muted">${screenBounds ? `SCREEN ${screenBounds.width} x ${screenBounds.height}` : ''}</p>
     </div>
   `;
 
@@ -471,63 +466,140 @@ function renderSettingsInspector() {
   els.inspector.querySelector('[data-command="sync-now"]').addEventListener('click', syncNow);
   els.inspector.querySelector('[data-command="desktop"]').addEventListener('click', () => setDesktopMode(!state.store.settings.desktopMode));
 
-  els.inspector.querySelector('[data-command="desktop-size"]').addEventListener('click', () => {
-    state.showDesktopSize = !state.showDesktopSize;
-    renderInspector();
-  });
-
-  const sizeFields = {
-    x: els.inspector.querySelector('#deskX'),
-    y: els.inspector.querySelector('#deskY'),
-    width: els.inspector.querySelector('#deskW'),
-    height: els.inspector.querySelector('#deskH')
-  };
-
-  for (const button of els.inspector.querySelectorAll('[data-preset]')) {
-    button.addEventListener('click', () => {
-      const screen = state.displayBounds || fallback;
-      const half = Math.round(screen.width / 2);
-      const preset = button.dataset.preset;
-      const next = preset === 'right'
-        ? { x: screen.x + half, y: screen.y, width: screen.width - half, height: screen.height }
-        : preset === 'left'
-          ? { x: screen.x, y: screen.y, width: half, height: screen.height }
-          : { x: screen.x, y: screen.y, width: screen.width, height: screen.height };
-      sizeFields.x.value = next.x;
-      sizeFields.y.value = next.y;
-      sizeFields.width.value = next.width;
-      sizeFields.height.value = next.height;
-    });
-  }
-
-  els.inspector.querySelector('[data-command="desktop-apply"]').addEventListener('click', applyDesktopSize);
+  els.inspector.querySelector('[data-command="desktop-drag"]').addEventListener('click', startDesktopSizeAdjust);
 }
 
-async function applyDesktopSize() {
-  const read = (id) => Math.round(Number(els.inspector.querySelector(id).value));
-  const next = { x: read('#deskX'), y: read('#deskY'), width: read('#deskW'), height: read('#deskH') };
-  if ([next.x, next.y, next.width, next.height].some((value) => !Number.isFinite(value))) {
-    showToast('Size values must be numbers');
+// Keep a box on screen so what gets saved matches what the attach will actually use.
+function clampToDisplay(bounds) {
+  const screen = state.displayBounds;
+  if (!bounds || !screen) return bounds || null;
+  const width = Math.min(bounds.width, screen.width);
+  const height = Math.min(bounds.height, screen.height);
+  return {
+    width,
+    height,
+    x: Math.max(screen.x, Math.min(bounds.x, screen.x + screen.width - width)),
+    y: Math.max(screen.y, Math.min(bounds.y, screen.y + screen.height - height))
+  };
+}
+
+// Rather than inventing resize handles on a click-through wallpaper, drop back to
+// a normal window and let the user size it with the usual OS drag, then capture
+// those bounds.
+async function startDesktopSizeAdjust() {
+  state.resumeDesktopAfterAdjust = Boolean(state.store.settings.desktopMode);
+  if (state.store.settings.desktopMode) await setDesktopMode(false, { quiet: true });
+
+  const target = state.store.settings.desktopBounds || state.displayBounds;
+  if (target) await window.daymark.setWindowBounds?.(target);
+
+  state.adjustingDesktopSize = true;
+  renderAll();
+  showToast('Resize and move the window, then press SAVE');
+}
+
+async function finishDesktopSizeAdjust(save) {
+  if (save) {
+    const bounds = clampToDisplay(await window.daymark.windowBounds?.());
+    if (bounds) {
+      const screen = state.displayBounds;
+      const isFull = screen
+        && bounds.x === screen.x && bounds.y === screen.y
+        && bounds.width === screen.width && bounds.height === screen.height;
+      state.store.settings.desktopBounds = isFull ? null : bounds;
+      await persist();
+    }
+  }
+
+  state.adjustingDesktopSize = false;
+  const resume = state.resumeDesktopAfterAdjust;
+  state.resumeDesktopAfterAdjust = false;
+  renderAll();
+
+  if (resume) await setDesktopMode(true, { quiet: true });
+  showToast(save ? 'Desktop size saved' : 'Size adjust cancelled');
+}
+
+const RESIZE_DIRECTIONS = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
+
+function renderResizeHandles() {
+  const host = els.resizeHandles;
+  if (!host) return;
+  host.classList.toggle('hidden', !state.adjustingDesktopSize);
+  if (!state.adjustingDesktopSize) {
+    host.innerHTML = '';
     return;
   }
+  if (host.childElementCount) return;
 
-  const screen = state.displayBounds;
-  const isFull = screen
-    && next.x === screen.x && next.y === screen.y
-    && next.width === screen.width && next.height === screen.height;
-  // Storing null for a full-screen box keeps it following the display if it changes.
-  state.store.settings.desktopBounds = isFull ? null : next;
-  await persist();
-
-  // Re-attach so the new box takes effect immediately.
-  if (state.store.settings.desktopMode) {
-    await setDesktopMode(false, { quiet: true });
-    await setDesktopMode(true, { quiet: true });
-    showToast('Desktop size applied');
-  } else {
-    renderInspector();
-    showToast('Desktop size saved');
+  for (const dir of RESIZE_DIRECTIONS) {
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    handle.dataset.dir = dir;
+    handle.addEventListener('pointerdown', (event) => beginResize(event, dir));
+    host.appendChild(handle);
   }
+}
+
+async function beginResize(event, dir) {
+  event.preventDefault();
+  const start = await window.daymark.windowBounds?.();
+  if (!start) return;
+
+  const originX = event.screenX;
+  const originY = event.screenY;
+  const handle = event.currentTarget;
+  handle.setPointerCapture(event.pointerId);
+
+  let frame = 0;
+  let pending = null;
+
+  const onMove = (moveEvent) => {
+    const dx = moveEvent.screenX - originX;
+    const dy = moveEvent.screenY - originY;
+    const next = { ...start };
+
+    if (dir.includes('e')) next.width = start.width + dx;
+    if (dir.includes('s')) next.height = start.height + dy;
+    if (dir.includes('w')) { next.x = start.x + dx; next.width = start.width - dx; }
+    if (dir.includes('n')) { next.y = start.y + dy; next.height = start.height - dy; }
+
+    pending = next;
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (pending) window.daymark.setWindowBounds?.(pending);
+    });
+  };
+
+  const onUp = () => {
+    handle.removeEventListener('pointermove', onMove);
+    handle.removeEventListener('pointerup', onUp);
+    handle.removeEventListener('pointercancel', onUp);
+    if (frame) cancelAnimationFrame(frame);
+    if (pending) window.daymark.setWindowBounds?.(pending);
+  };
+
+  handle.addEventListener('pointermove', onMove);
+  handle.addEventListener('pointerup', onUp);
+  handle.addEventListener('pointercancel', onUp);
+}
+
+function renderSizeAdjustBar() {
+  const bar = els.sizeAdjustBar;
+  if (!bar) return;
+  bar.classList.toggle('hidden', !state.adjustingDesktopSize);
+  if (!state.adjustingDesktopSize) {
+    bar.innerHTML = '';
+    return;
+  }
+  bar.innerHTML = `
+    <span>Drag the window edges to set the desktop size</span>
+    <button class="terminal-button" type="button" data-size-adjust="save">SAVE</button>
+    <button class="terminal-button" type="button" data-size-adjust="cancel">CANCEL</button>
+  `;
+  bar.querySelector('[data-size-adjust="save"]').addEventListener('click', () => finishDesktopSizeAdjust(true));
+  bar.querySelector('[data-size-adjust="cancel"]').addEventListener('click', () => finishDesktopSizeAdjust(false));
 }
 
 async function updateSyncSetting(key, value) {
@@ -855,15 +927,6 @@ async function setDesktopMode(enabled, options = {}) {
   await persist();
   renderAll();
   if (!options.quiet) showToast(result.message || (enabled ? '???? ??' : '? ??'));
-}
-
-function startClock() {
-  const tick = () => {
-    const now = new Date();
-    els.systemClock.textContent = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
-  };
-  tick();
-  state.clockTimer = setInterval(tick, 1000);
 }
 
 function activePage() {
