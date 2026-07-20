@@ -1,0 +1,4 @@
+#!/bin/sh
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+exec node "$repo_root/scripts/check-commit-message.js" --file "$1"
