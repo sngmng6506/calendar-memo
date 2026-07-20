@@ -22,7 +22,7 @@
   --shadow-panel: 0 12px 30px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.022);
   --radius-panel: 2px;
   --radius-control: 2px;
-  --mono: "Cascadia Mono", "JetBrains Mono", "D2Coding", Consolas, monospace;
+  --mono: "D2Coding", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
 }
 
 html, body {
