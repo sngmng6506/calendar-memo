@@ -3,6 +3,12 @@ export function createPersistenceController({ state, saveStore }) {
   let dirty = false;
   let debounceTimer = null;
   let debounceResolvers = [];
+  let notifyAfterRun = false;
+
+  function emitPersisted() {
+    if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('daymark:persisted'));
+  }
 
   async function run() {
     if (running) {
@@ -26,6 +32,9 @@ export function createPersistenceController({ state, saveStore }) {
       await running;
     } finally {
       running = null;
+      const shouldNotify = notifyAfterRun;
+      notifyAfterRun = false;
+      if (shouldNotify) queueMicrotask(emitPersisted);
     }
   }
 
@@ -40,6 +49,8 @@ export function createPersistenceController({ state, saveStore }) {
 
   function persist(options = {}) {
     const debounceMs = Number(options.debounceMs || 0);
+    if (!options.skipSync) notifyAfterRun = true;
+
     if (!debounceMs) {
       clearTimeout(debounceTimer);
       debounceTimer = null;
