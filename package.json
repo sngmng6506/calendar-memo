@@ -5,9 +5,12 @@
   "description": "A terminal-style Electron desktop dashboard for calendar-first personal operations.",
   "main": "electron/main.js",
   "scripts": {
+    "prepare": "node scripts/install-git-hooks.js",
+    "setup:git": "node scripts/install-git-hooks.js",
+    "check:commit": "node scripts/check-commit-message.js",
     "start": "electron .",
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:DAYMARK_DEV='1'; electron .\"",
-    "check": "node --check electron/main.js && node --check electron/preload.js && node --check electron/data-model.js && node --check electron/store.js && node --check electron/sync.js && node --check server/sync-server.js && node --check web/utils.js && node --check web/tasks.js && node --check web/devSeed.js && node --check web/controllers/persistence.js && node --check web/controllers/syncController.js && node --check web/controllers/descriptionEditor.js && node --check web/controllers/desktopController.js && node --check web/pages/calendar.js && node --check web/pages/dateInspector.js && node --check web/pages/today.js && node --check web/pages/analytics.js && node --check web/pages/settings.js && node --check web/app.js",
+    "check": "node --check electron/main.js && node --check electron/preload.js && node --check electron/data-model.js && node --check electron/store.js && node --check electron/sync.js && node --check server/sync-server.js && node --check scripts/check-commit-message.js && node --check scripts/install-git-hooks.js && node --check web/utils.js && node --check web/tasks.js && node --check web/devSeed.js && node --check web/controllers/persistence.js && node --check web/controllers/syncController.js && node --check web/controllers/descriptionEditor.js && node --check web/controllers/desktopController.js && node --check web/pages/calendar.js && node --check web/pages/dateInspector.js && node --check web/pages/today.js && node --check web/pages/analytics.js && node --check web/pages/settings.js && node --check web/app.js",
     "test": "node --test test/*.test.js",
     "verify": "npm run check && npm test",
     "build:desktop-host": "powershell -ExecutionPolicy Bypass -File scripts/build-desktop-host.ps1",
