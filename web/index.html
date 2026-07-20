@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Daymark Ops Console</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="sync-status.css" />
   </head>
   <body>
     <main class="ops-shell">
@@ -12,6 +13,9 @@
         <div class="title-drag-handle" aria-hidden="true"></div>
         <div class="status-strip" id="statusStrip"></div>
         <div class="topbar-controls">
+          <button id="syncStatusButton" class="sync-status" type="button" data-state="idle" aria-label="동기화 상태: 자동 동기화 대기" title="Automatic sync is ready">
+            <span class="sync-status-icon" aria-hidden="true">↻</span>
+          </button>
           <nav id="pageTabs" class="page-tabs" aria-label="Pages"></nav>
           <button id="settingsButton" class="page-tab">SETTINGS</button>
         </div>
