@@ -25,6 +25,8 @@ The following elements are part of the product identity and should not be replac
 - a restrained technical grid or instrumentation texture
 - thin borders, operational status text, and keyboard-visible focus states
 
+The task renderer owns the literal `[ ]` and `[x]` text. Theme CSS may change its color, weight, or spacing, but must not replace it or prepend a second marker.
+
 Avoid:
 
 - circular task bullets or standalone check icons replacing `[ ]` and `[x]`
@@ -114,12 +116,13 @@ Evaluate the branch at normal desktop size and in Desktop Mode.
 1. Can today and the selected date be identified independently within one second?
 2. Does the interface still read as a terminal tool before it reads as a todo app?
 3. Are `[ ]`, `[x]`, `DEL`, and `$` cues preserved and legible?
-4. Is task text easier to read than metadata and controls?
-5. Does the eye go to content before borders and background effects?
-6. Are hover, keyboard focus, selection, sync, success, and error distinguishable?
-7. Does a bright wallpaper reduce readability?
-8. Is the delete action discoverable without distracting from task content?
-9. Do any rounded, decorative, or icon-only choices feel imported from a generic SaaS interface?
+4. Is each task shown with exactly one state marker?
+5. Is task text easier to read than metadata and controls?
+6. Does the eye go to content before borders and background effects?
+7. Are hover, keyboard focus, selection, sync, success, and error distinguishable?
+8. Does a bright wallpaper reduce readability?
+9. Is the delete action discoverable without distracting from task content?
+10. Do any rounded, decorative, or icon-only choices feel imported from a generic SaaS interface?
 
 ## Later passes
 
