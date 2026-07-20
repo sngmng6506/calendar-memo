@@ -20,19 +20,21 @@ The following elements are part of the product identity and should not be replac
 
 - monospace typography for primary interface and task content
 - literal `[ ]` and `[x]` task state markers
-- command labels such as `DEL`, `CARRY OPEN`, and `$` analytics prefixes
+- functional command labels such as `DEL` and `CARRY OPEN`
 - compact, angular controls and task rows
 - a restrained technical grid or instrumentation texture
 - thin borders, operational status text, and keyboard-visible focus states
 
 The task renderer owns the literal `[ ]` and `[x]` text. Theme CSS may change its color, weight, or spacing, but must not replace it or prepend a second marker.
 
+Terminal identity should come from typography, density, syntax, and structure—not decorative prompt cosplay. Analytics headings and other passive labels should not receive `$`, `>`, or similar prefixes unless they represent an actual command or input context.
+
 Avoid:
 
 - circular task bullets or standalone check icons replacing `[ ]` and `[x]`
 - globally switching the product to a proportional sans-serif face
 - rounded card stacks that make task rows resemble a generic mobile todo app
-- decorative dots replacing command-line prefixes
+- decorative prompt symbols on passive headings
 - softening every surface until the console structure disappears
 
 ## Principles
@@ -103,7 +105,7 @@ The `web/calm-terminal.css` layer changes presentation only:
 - calendar date states and original bracket task markers
 - angular task blocks, focus, hover, and delete behavior
 - inspector spacing and settings controls
-- command-style analytics panel separation
+- restrained analytics panel separation without decorative prompt symbols
 - sync, toast, and resize status treatment
 - reduced-motion support
 
@@ -117,14 +119,14 @@ Evaluate the branch at normal desktop size and in Desktop Mode:
 
 1. Can today and the selected date be identified independently within one second?
 2. Does the interface read as a terminal tool before it reads as a todo app?
-3. Are `[ ]`, `[x]`, `DEL`, and `$` cues preserved and legible?
+3. Are `[ ]`, `[x]`, `DEL`, monospace typography, and angular structure preserved?
 4. Is each task shown with exactly one state marker?
 5. Is task text easier to read than metadata and controls?
 6. Does the eye go to content before borders and background effects?
 7. Are hover, keyboard focus, selection, sync, success, and error distinguishable?
 8. Does a bright wallpaper reduce readability?
 9. Is the delete action discoverable without distracting from task content?
-10. Do any rounded, decorative, or icon-only choices feel imported from a generic SaaS interface?
+10. Do any rounded, decorative, icon-only, or fake-prompt choices feel imported or forced?
 
 ## Later passes
 
@@ -132,7 +134,7 @@ After visual review:
 
 - tune compact versus comfortable density
 - add shortcut hints only where they improve discovery
-- revisit analytics information hierarchy without removing command cues
+- revisit analytics information hierarchy without adding decorative syntax
 - consider a command palette
 - test light and visually noisy wallpapers
 - consolidate the approved theme rules into the base stylesheet
