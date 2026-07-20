@@ -1,4 +1,13 @@
+'use strict';
+
 const { contextBridge, ipcRenderer } = require('electron');
+
+function subscribe(channel, callback, mapValue = (...args) => args) {
+  if (typeof callback !== 'function') return () => {};
+  const handler = (_event, ...args) => callback(mapValue(...args));
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+}
 
 contextBridge.exposeInMainWorld('daymark', {
   loadStore: () => ipcRenderer.invoke('store:load'),
@@ -15,15 +24,9 @@ contextBridge.exposeInMainWorld('daymark', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
-  onMaximizedChange: (callback) => {
-    ipcRenderer.on('window:maximized-change', (_event, value) => callback(Boolean(value)));
-  },
+  onMaximizedChange: (callback) => subscribe('window:maximized-change', callback, Boolean),
   close: () => ipcRenderer.invoke('window:close'),
-  onTrayToggleDesktop: (callback) => {
-    ipcRenderer.on('tray:toggle-desktop', () => callback());
-  },
-  onTrayOpenSettings: (callback) => {
-    ipcRenderer.on('tray:open-settings', () => callback());
-  },
+  onTrayToggleDesktop: (callback) => subscribe('tray:toggle-desktop', callback, () => undefined),
+  onTrayOpenSettings: (callback) => subscribe('tray:open-settings', callback, () => undefined),
   copy: (text) => ipcRenderer.invoke('clipboard:write', text)
 });
