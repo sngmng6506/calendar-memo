@@ -31,7 +31,32 @@ npm run dev
 npm run verify
 ```
 
-`verify`는 모든 JavaScript 파일의 문법 검사와 저장·동기화 단위 테스트를 실행합니다.
+`verify`는 모든 JavaScript 파일의 문법 검사와 저장·동기화·커밋 정책 단위 테스트를 실행합니다.
+
+## Agent 커밋 정책
+
+Coding agent는 작업을 하나의 큰 커밋으로 묶지 않고 **논리 단위별 커밋**으로 나눠야 합니다. 모든 비-merge 커밋에는 다음 항목이 필수입니다.
+
+```text
+<하나의 논리 변경을 설명하는 요약>
+
+Why:
+- 이 변경이 필요했던 구체적인 문제·위험·사용자 요구
+
+Decision:
+- 선택한 구현과 주요 trade-off 또는 배제한 대안
+
+Verification:
+- 수행한 검사와 테스트 (선택)
+```
+
+`npm install`은 `.gitmessage`와 `.githooks/commit-msg`를 자동 설정합니다. 설정을 다시 적용하려면 다음을 실행합니다.
+
+```powershell
+npm run setup:git
+```
+
+로컬 hook은 잘못된 메시지를 커밋 전에 막고, CI는 pull request의 모든 비-merge 커밋을 다시 검사합니다. `TBD`, `N/A`, `none`, 제목 반복 같은 형식적 내용은 허용되지 않습니다. 상세 작업 규칙은 [`AGENTS.md`](AGENTS.md)를 따릅니다.
 
 ## Desktop Mode
 
@@ -120,6 +145,7 @@ test/
   data-model.test.js
   store.test.js
   sync.test.js
+  commit-policy.test.js
 ```
 
 ## 설계 원칙
