@@ -1,0 +1,15 @@
+# Summary: one logical change, written precisely (recommended <= 72 characters)
+
+Why:
+# - Explain the concrete problem, risk, or user need.
+
+Decision:
+# - Record the implementation choice and an important trade-off or rejected alternative.
+
+Verification:
+# - List tests or checks performed. This section is optional but recommended.
+
+# Rules:
+# - Keep this commit to one independently reviewable logical unit.
+# - Replace all instructional comments and placeholders.
+# - Do not bypass the commit-msg hook with --no-verify.
