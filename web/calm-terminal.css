@@ -1,31 +1,30 @@
 /*
  * Calm Terminal
  *
- * A visual refinement layer for Daymark. Functional layout remains owned by
- * styles.css; this file defines hierarchy, rhythm, material, and interaction
- * states so the direction can be evaluated or removed independently.
+ * A compact visual layer for Daymark. Layout and behavior remain in styles.css;
+ * this file owns color hierarchy, typography, material, and interaction states.
  */
 
 :root {
-  --bg: #07090c;
-  --panel: rgba(13, 16, 21, 0.88);
-  --panel-strong: rgba(17, 21, 27, 0.96);
+  --bg: #080a0d;
+  --panel: rgba(14, 17, 22, 0.94);
+  --panel-strong: rgba(18, 22, 28, 0.97);
   --surface-soft: rgba(255, 255, 255, 0.025);
-  --surface-hover: rgba(255, 255, 255, 0.05);
-  --surface-active: rgba(149, 241, 205, 0.09);
-  --line: rgba(231, 239, 246, 0.08);
-  --line-strong: rgba(231, 239, 246, 0.16);
+  --surface-hover: rgba(255, 255, 255, 0.052);
+  --surface-active: rgba(149, 241, 205, 0.085);
+  --line: rgba(231, 239, 246, 0.075);
+  --line-strong: rgba(231, 239, 246, 0.155);
   --text: #eef4f1;
-  --muted: rgba(226, 235, 232, 0.62);
-  --faint: rgba(226, 235, 232, 0.34);
+  --muted: rgba(226, 235, 232, 0.64);
+  --faint: rgba(226, 235, 232, 0.38);
   --accent: #95f1cd;
-  --accent-soft: rgba(149, 241, 205, 0.12);
+  --accent-soft: rgba(149, 241, 205, 0.11);
   --accent-line: rgba(149, 241, 205, 0.42);
   --cyan: #8ad7f7;
   --warn: #e9bf70;
   --danger: #f08a93;
   --done: #8bdcb6;
-  --shadow-panel: 0 16px 42px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  --shadow-panel: 0 14px 34px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.025);
   --radius-panel: 8px;
   --radius-control: 5px;
   --sans: Inter, "Segoe UI Variable", "Segoe UI", Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -36,16 +35,13 @@ html,
 body {
   color: var(--text);
   font-family: var(--sans);
-  letter-spacing: -0.012em;
+  letter-spacing: -0.01em;
 }
 
 body {
   background:
-    radial-gradient(circle at 20% -20%, rgba(149, 241, 205, 0.055), transparent 38%),
-    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px),
-    linear-gradient(145deg, rgba(5, 7, 10, 0.98), rgba(9, 12, 16, 0.94));
-  background-size: auto, 32px 32px, 32px 32px, cover;
+    radial-gradient(circle at 18% -25%, rgba(149, 241, 205, 0.028), transparent 40%),
+    linear-gradient(145deg, rgba(6, 8, 11, 0.985), rgba(10, 13, 17, 0.965));
 }
 
 button,
@@ -59,7 +55,7 @@ button {
   border-color: transparent;
   border-radius: var(--radius-control);
   background: transparent;
-  transition: color 130ms ease, background-color 130ms ease, border-color 130ms ease, box-shadow 130ms ease;
+  transition: color 130ms ease, background-color 130ms ease, border-color 130ms ease, box-shadow 130ms ease, opacity 130ms ease;
 }
 
 button:hover {
@@ -78,32 +74,36 @@ select:focus-visible {
 .ops-shell {
   padding: 12px;
   gap: 8px;
-  background: rgba(0, 0, 0, calc(0.025 * var(--surface-alpha)));
-  backdrop-filter: blur(14px) saturate(1.08);
-  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  background: rgba(0, 0, 0, calc(0.018 * var(--surface-alpha)));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .topbar,
 .main-panel,
 .inspector {
   border-color: var(--line);
-  background: var(--panel);
   box-shadow: var(--shadow-panel);
 }
 
 .topbar {
   border-radius: var(--radius-panel);
-  background: rgba(15, 18, 23, 0.9);
+  background: rgba(15, 18, 23, 0.91);
+  backdrop-filter: blur(9px) saturate(1.04);
+  -webkit-backdrop-filter: blur(9px) saturate(1.04);
 }
 
 .main-panel {
   border-radius: var(--radius-panel) 0 0 var(--radius-panel);
+  background: rgba(13, 16, 21, 0.97);
 }
 
 .inspector {
-  border-left-color: rgba(231, 239, 246, 0.055);
+  border-left-color: rgba(231, 239, 246, 0.05);
   border-radius: 0 var(--radius-panel) var(--radius-panel) 0;
   background: var(--panel-strong);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 body.desktop-mode .topbar,
@@ -137,7 +137,7 @@ body.is-maximized .inspector {
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 650;
-  letter-spacing: 0.035em;
+  letter-spacing: 0.03em;
 }
 
 .page-tab:hover,
@@ -152,26 +152,34 @@ body.is-maximized .inspector {
 .terminal-button.active {
   color: var(--text);
   border-color: var(--line-strong);
-  background: rgba(255, 255, 255, 0.065);
+  background: rgba(255, 255, 255, 0.06);
   box-shadow: inset 0 -1px 0 var(--accent-line);
 }
 
 .status-strip {
-  gap: 5px;
+  gap: 2px;
   padding: 0 8px;
   font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.02em;
+  font-size: 10px;
+  letter-spacing: 0.015em;
+}
+
+/* TASKS and DONE belong in Analytics; the top bar keeps only actionable state. */
+.status-item:nth-child(1),
+.status-item:nth-child(2) {
+  display: none;
 }
 
 .status-item {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  padding: 3px 7px;
-  border: 1px solid transparent;
-  border-radius: 999px;
+  padding: 3px 6px;
   color: var(--faint);
+}
+
+.status-item + .status-item {
+  border-left: 1px solid var(--line);
 }
 
 .status-item span {
@@ -196,12 +204,12 @@ body.is-maximized .inspector {
 .analytics-panel-head,
 .size-adjust-bar {
   font-family: var(--mono);
-  letter-spacing: 0.035em;
+  letter-spacing: 0.03em;
 }
 
 .eyebrow {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 650;
 }
 
@@ -218,18 +226,18 @@ body.is-maximized .inspector {
 .weekday-row {
   border-bottom-color: var(--line);
   color: var(--faint);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 650;
 }
 
 .calendar-grid {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.025);
 }
 
 .day-cell {
   padding: 8px 9px 7px;
-  border-right-color: rgba(231, 239, 246, 0.055);
-  border-bottom-color: rgba(231, 239, 246, 0.055);
+  border-right-color: rgba(231, 239, 246, 0.052);
+  border-bottom-color: rgba(231, 239, 246, 0.052);
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
@@ -238,11 +246,11 @@ body.is-maximized .inspector {
 }
 
 .day-cell.outside {
-  opacity: 0.3;
+  opacity: 0.32;
 }
 
 .day-cell.selected {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.038);
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
@@ -251,7 +259,7 @@ body.is-maximized .inspector {
 }
 
 .day-cell.today.selected {
-  background: rgba(149, 241, 205, 0.045);
+  background: rgba(149, 241, 205, 0.04);
   box-shadow: inset 0 0 0 1px rgba(149, 241, 205, 0.22);
 }
 
@@ -264,31 +272,31 @@ body.is-maximized .inspector {
 }
 
 .day-number {
-  min-width: 22px;
-  height: 22px;
+  min-width: 23px;
+  height: 23px;
   display: inline-grid;
   place-items: center;
   border-radius: 999px;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .day-cell.today .day-number {
   color: #07110d;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(149, 241, 205, 0.08);
+  box-shadow: 0 0 0 3px rgba(149, 241, 205, 0.075);
 }
 
 .weekday.saturday,
 .day-cell.saturday .day-number {
-  color: rgba(138, 215, 247, 0.74);
+  color: rgba(138, 215, 247, 0.72);
 }
 
 .weekday.sunday,
 .day-cell.sunday .day-number {
-  color: rgba(240, 138, 147, 0.74);
+  color: rgba(240, 138, 147, 0.72);
 }
 
 .day-cell.today.saturday .day-number,
@@ -303,29 +311,33 @@ body.is-maximized .inspector {
 .task-preview {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: var(--muted);
   font-family: var(--sans);
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .task-preview::before {
-  content: "";
-  flex: 0 0 auto;
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(226, 235, 232, 0.28);
+  content: "○";
+  flex: 0 0 11px;
+  width: 11px;
+  color: rgba(226, 235, 232, 0.38);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
 }
 
 .task-preview.completed {
-  color: rgba(226, 235, 232, 0.32);
-  text-decoration-color: rgba(226, 235, 232, 0.24);
+  color: rgba(226, 235, 232, 0.34);
+  text-decoration-color: rgba(226, 235, 232, 0.22);
 }
 
 .task-preview.completed::before {
-  background: rgba(139, 220, 182, 0.55);
+  content: "✓";
+  color: rgba(139, 220, 182, 0.7);
+  font-size: 10px;
 }
 
 .task-preview.more::before {
@@ -404,13 +416,13 @@ body.is-maximized .inspector {
 
 .task-input {
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 450;
 }
 
 .task-input::placeholder,
 .description-input::placeholder {
-  color: rgba(226, 235, 232, 0.22);
+  color: rgba(226, 235, 232, 0.24);
 }
 
 .task-row.draft .task-input:focus {
@@ -429,6 +441,7 @@ body.is-maximized .inspector {
   border-radius: 0 4px 4px 0;
   background: rgba(255, 255, 255, 0.015);
   color: var(--muted);
+  font-size: 12px;
 }
 
 .description-input:focus {
@@ -438,8 +451,8 @@ body.is-maximized .inspector {
 }
 
 .task-delete {
-  color: rgba(226, 235, 232, 0.24);
-  opacity: 0;
+  color: rgba(226, 235, 232, 0.3);
+  opacity: 0.18;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 
@@ -464,7 +477,7 @@ body.is-maximized .inspector {
 
 .kv span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .kv strong {
@@ -507,7 +520,7 @@ body.is-maximized .inspector {
 
 .analytics-panel {
   border: 0;
-  background: rgba(12, 15, 20, 0.96);
+  background: rgba(12, 15, 20, 0.97);
 }
 
 .analytics-panel-head {
@@ -515,7 +528,7 @@ body.is-maximized .inspector {
   padding: 0 14px;
   border-bottom-color: var(--line);
   color: var(--faint);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 650;
 }
 
@@ -526,7 +539,7 @@ body.is-maximized .inspector {
   height: 5px;
   margin-right: 7px;
   border-radius: 999px;
-  background: rgba(149, 241, 205, 0.62);
+  background: rgba(149, 241, 205, 0.58);
   vertical-align: 1px;
 }
 
@@ -539,16 +552,16 @@ body.is-maximized .inspector {
 .toast {
   border: 1px solid var(--line-strong);
   border-radius: 7px;
-  background: rgba(19, 23, 29, 0.96);
+  background: rgba(19, 23, 29, 0.97);
   color: var(--text);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
 }
 
 .size-adjust-bar {
   border-color: var(--accent-line);
   border-radius: 7px;
-  background: rgba(14, 18, 22, 0.97);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  background: rgba(14, 18, 22, 0.98);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
 }
 
 .sync-status {
@@ -563,7 +576,7 @@ body.is-maximized .inspector {
 
 .sync-status[data-state="syncing"],
 .sync-status[data-state="pending"] {
-  background: rgba(149, 241, 205, 0.055);
+  background: rgba(149, 241, 205, 0.05);
 }
 
 .sync-status[data-state="synced"] {
