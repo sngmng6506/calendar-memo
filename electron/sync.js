@@ -33,7 +33,7 @@ function createSyncService(options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const saveStore = options.saveStore;
   const now = options.now || (() => new Date());
-  const configuredUrl = String(options.syncUrl || '').trim();
+  const configuredUrl = String(options.syncUrl || process.env.DAYMARK_SYNC_URL || '').trim();
 
   async function sync(store) {
     const { endpoint, error } = syncEndpoint(store.settings, configuredUrl);
