@@ -1,40 +1,52 @@
 import { isoDate, startOfMonth } from './utils.js';
 
 export function addTask(store, taskDate, content, originTaskId = null, description = '', descriptionHeight = 0) {
-  const sortOrder = tasksForDate(store, taskDate).length;
-  store.tasks.push({
+  const now = new Date().toISOString();
+  const task = {
     id: crypto.randomUUID(),
     taskDate,
     content,
     description,
     descriptionHeight,
     completed: false,
-    sortOrder,
+    sortOrder: tasksForDate(store, taskDate).length,
     originTaskId,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  });
+    createdAt: now,
+    updatedAt: now
+  };
+  store.tasks.push(task);
+  return task;
 }
 
 export function removeTask(store, taskId) {
   const task = store.tasks.find((item) => item.id === taskId);
   store.tasks = store.tasks.filter((item) => item.id !== taskId);
-  if (task) {
-    const deletedAt = new Date().toISOString();
-    store.deleted ||= [];
+  if (!task) return;
+
+  const deletedAt = new Date().toISOString();
+  store.deleted ||= [];
+  const existing = store.deleted.find((item) => item.collection === 'tasks' && item.recordId === task.id);
+  if (existing) {
+    existing.deletedAt = deletedAt;
+    delete existing.syncedAt;
+  } else {
     store.deleted.push({ collection: 'tasks', recordId: task.id, deletedAt });
-    normalizeOrders(store, task.taskDate);
   }
+  normalizeOrders(store, task.taskDate, deletedAt);
 }
 
-export function normalizeOrders(store, taskDate) {
-  tasksForDate(store, taskDate).forEach((task, index) => task.sortOrder = index);
+export function normalizeOrders(store, taskDate, updatedAt = new Date().toISOString()) {
+  tasksForDate(store, taskDate).forEach((task, index) => {
+    if (task.sortOrder === index) return;
+    task.sortOrder = index;
+    task.updatedAt = updatedAt;
+  });
 }
 
 export function tasksForDate(store, taskDate) {
   return store.tasks
     .filter((task) => task.taskDate === taskDate)
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
 }
 
 export function tasksForVisibleMonth(store, current) {
