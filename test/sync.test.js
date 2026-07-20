@@ -10,10 +10,18 @@ test('sync endpoint rejects insecure remote HTTP URLs', () => {
   assert.equal(syncEndpoint({ syncUrl: 'https://example.com/base/' }).endpoint, 'https://example.com/base/api/sync');
 });
 
+test('app-owned sync endpoint works without a user URL setting', () => {
+  assert.equal(syncEndpoint({}, 'https://sync.example.com').endpoint, 'https://sync.example.com/api/sync');
+  assert.equal(syncEndpoint({ syncUrl: 'https://legacy.example.com' }, 'https://sync.example.com').endpoint, 'https://sync.example.com/api/sync');
+});
+
 test('sync sends a cursor, merges returned records and advances the cursor', async () => {
   let requestBody;
+  let requestUrl;
   const service = createSyncService({
-    fetchImpl: async (_url, options) => {
+    syncUrl: 'https://example.com',
+    fetchImpl: async (url, options) => {
+      requestUrl = url;
       requestBody = JSON.parse(options.body);
       return {
         ok: true,
@@ -42,14 +50,16 @@ test('sync sends a cursor, merges returned records and advances the cursor', asy
     reports: [],
     deleted: [],
     settings: {
-      syncUrl: 'https://example.com',
       syncKey: 'x'.repeat(32),
       syncCursor: '2026-07-20T10:00:00.000Z'
     }
   });
 
+  assert.equal(requestUrl, 'https://example.com/api/sync');
   assert.equal(requestBody.cursor, '2026-07-20T10:00:00.000Z');
   assert.deepEqual(requestBody.records.map((record) => record.recordId), ['local']);
   assert.deepEqual(result.store.tasks.map((task) => task.id).sort(), ['local', 'remote']);
   assert.equal(result.store.settings.syncCursor, '2026-07-20T11:00:00.000Z');
+  assert.equal(result.uploadedCount, 1);
+  assert.equal(result.downloadedCount, 1);
 });
