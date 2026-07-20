@@ -2,7 +2,7 @@ import { escapeHtml } from '../utils.js';
 
 export function renderSettingsInspector({ inspector, state, desktop, sync }) {
   const opacity = Number(state.store.settings.windowOpacity ?? 0.86);
-  const lastSync = state.store.settings.lastSyncedAt || 'never';
+  const lastSync = state.store.settings.lastSyncedAt || 'waiting for first sync';
   const lastError = state.store.settings.lastSyncError || '';
   const recovery = state.store.settings.lastStoreRecovery || '';
   const screenBounds = state.displayBounds;
@@ -17,17 +17,15 @@ export function renderSettingsInspector({ inspector, state, desktop, sync }) {
     </div>
     <div class="inspector-block">
       <div class="eyebrow">SYNC</div>
+      <div class="kv"><span>AUTO SYNC</span><strong>ALWAYS ON</strong></div>
+      <p class="muted">Saved changes sync automatically. The round icon in the top bar rotates while data is being transferred.</p>
       <div class="setting-row">
-        <label for="syncUrlInput">SYNC URL</label>
-        <input id="syncUrlInput" class="settings-input" value="${escapeHtml(state.store.settings.syncUrl || '')}" placeholder="https://your-app.up.railway.app" autocomplete="off">
-      </div>
-      <div class="setting-row">
-        <label for="syncKeyInput">SYNC KEY</label>
+        <label for="syncKeyInput">PERSONAL SYNC CODE</label>
         <input id="syncKeyInput" class="settings-input" type="password" value="${escapeHtml(state.store.settings.syncKey || '')}" placeholder="${sync.MIN_SYNC_KEY_LENGTH}+ characters" autocomplete="off">
       </div>
-      <button class="terminal-button full" type="button" data-command="generate-sync-key">GENERATE SECURE KEY</button>
+      <button class="terminal-button full" type="button" data-command="generate-sync-key">GENERATE NEW CODE</button>
       <div class="kv"><span>LAST SYNC</span><strong>${escapeHtml(lastSync)}</strong></div>
-      ${lastError ? `<p class="muted">${escapeHtml(lastError)}</p>` : ''}
+      ${lastError ? `<p class="muted sync-error-copy">${escapeHtml(lastError)}</p>` : ''}
       <button class="terminal-button full" type="button" data-command="sync-now">SYNC NOW</button>
     </div>
     <div class="inspector-block">
@@ -49,12 +47,10 @@ export function renderSettingsInspector({ inspector, state, desktop, sync }) {
   });
   range.addEventListener('change', () => desktop.setOpacity(Number(range.value)));
 
-  const syncUrl = inspector.querySelector('#syncUrlInput');
   const syncKey = inspector.querySelector('#syncKeyInput');
-  syncUrl.addEventListener('blur', () => sync.updateSetting('syncUrl', syncUrl.value));
   syncKey.addEventListener('blur', () => sync.updateSetting('syncKey', syncKey.value));
   inspector.querySelector('[data-command="generate-sync-key"]').addEventListener('click', sync.generateAndSaveKey);
-  inspector.querySelector('[data-command="sync-now"]').addEventListener('click', () => sync.syncNow());
+  inspector.querySelector('[data-command="sync-now"]').addEventListener('click', () => sync.syncNow({ reason: 'manual' }));
   inspector.querySelector('[data-command="desktop"]').addEventListener('click', () => desktop.setDesktopMode(!state.store.settings.desktopMode));
   inspector.querySelector('[data-command="desktop-drag"]').addEventListener('click', desktop.startDesktopSizeAdjust);
   inspector.querySelector('[data-command="auto-start"]').addEventListener('click', desktop.toggleAutoStart);
