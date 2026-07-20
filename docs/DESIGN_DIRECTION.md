@@ -27,7 +27,7 @@ The following elements are part of the product identity and should not be replac
 
 The task renderer owns the literal `[ ]` and `[x]` text. Theme CSS may change its color, weight, or spacing, but must not replace it or prepend a second marker.
 
-Terminal identity should come from typography, density, syntax, and structure—not decorative prompt cosplay. Analytics headings and other passive labels should not receive `$`, `>`, or similar prefixes unless they represent an actual command or input context.
+Terminal identity should come from typography, density, syntax, and structure—not decorative prompt cosplay. Passive headings such as Analytics panel titles remain plain uppercase monospace labels. `$`, `>`, and similar prefixes are reserved for real command or input contexts.
 
 Avoid:
 
