@@ -109,12 +109,14 @@ The `web/calm-terminal.css` layer changes presentation only:
 
 The functional layout remains in `web/styles.css`. Removing one stylesheet link restores the previous appearance.
 
-## Review checklist
+## Review baseline
 
-Evaluate the branch at normal desktop size and in Desktop Mode.
+The design succeeds only when it remains recognizably Daymark before it resembles its references. The modernization target is a cleaner terminal tool, not a terminal-themed version of a generic todo app.
+
+Evaluate the branch at normal desktop size and in Desktop Mode:
 
 1. Can today and the selected date be identified independently within one second?
-2. Does the interface still read as a terminal tool before it reads as a todo app?
+2. Does the interface read as a terminal tool before it reads as a todo app?
 3. Are `[ ]`, `[x]`, `DEL`, and `$` cues preserved and legible?
 4. Is each task shown with exactly one state marker?
 5. Is task text easier to read than metadata and controls?
