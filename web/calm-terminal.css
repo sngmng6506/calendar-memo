@@ -211,7 +211,7 @@ body.is-maximized .topbar, body.is-maximized .main-panel, body.is-maximized .ins
 .analytics-quadrants { gap: 1px; background: var(--line); }
 .analytics-panel { border: 0; background: rgba(12, 15, 20, 0.97); }
 .analytics-panel-head { height: 36px; padding: 0 14px; border-bottom-color: var(--line); color: var(--faint); font: 650 10px var(--mono); }
-.analytics-panel-head span::before { content: "$ "; color: var(--accent); }
+.analytics-panel-head span::before { content: none; }
 .analytics-panel-head strong { color: var(--muted); font-family: var(--mono); font-weight: 650; }
 
 .toast { border: 1px solid var(--line-strong); border-radius: 2px; background: rgba(19, 23, 29, 0.97); color: var(--text); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3); }
