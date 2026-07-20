@@ -147,6 +147,7 @@ body.is-maximized .topbar, body.is-maximized .main-panel, body.is-maximized .ins
   color: var(--muted);
   font: 400 11px/1.4 var(--mono);
 }
+.task-preview::before { content: none; display: none; }
 .task-preview.completed { color: rgba(226, 235, 232, 0.34); text-decoration-color: rgba(226, 235, 232, 0.22); }
 
 .inspector-block { margin-top: 16px; padding-top: 16px; border-top-color: var(--line); }
