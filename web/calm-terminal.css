@@ -94,8 +94,6 @@ body.is-maximized .topbar, body.is-maximized .main-panel, body.is-maximized .ins
 }
 
 .status-strip { gap: 2px; padding: 0 8px; font: 400 10px var(--mono); letter-spacing: 0.015em; }
-/* Total and completed counts belong in Analytics. */
-.status-item:nth-child(1), .status-item:nth-child(2) { display: none; }
 .status-item { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 6px; color: var(--faint); }
 .status-item + .status-item { border-left: 1px solid var(--line); }
 .status-item span { margin: 0; color: var(--faint); }
