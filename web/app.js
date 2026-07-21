@@ -168,14 +168,12 @@ function renderTabs() {
 function renderStatusStrip() {
   const monthTasks = tasksForVisibleMonth();
   const done = monthTasks.filter((task) => task.completed).length;
-  const selectedTasks = tasksForDate(state.selected);
+  const selectedOpen = tasksForDate(state.selected).filter((task) => !task.completed).length;
   const today = isoDate(new Date());
   const carry = state.store.tasks.filter((task) => task.taskDate < today && !task.completed).length;
   const rows = [
-    ['TASKS', String(monthTasks.length)],
-    ['DONE', String(done)],
     ['OPEN', String(monthTasks.length - done)],
-    ['SELECTED OPEN', String(selectedTasks.filter((task) => !task.completed).length)],
+    ['SELECTED OPEN', String(selectedOpen)],
     ['CARRY', String(carry)]
   ];
 
