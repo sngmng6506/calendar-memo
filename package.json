@@ -14,6 +14,7 @@
     "test": "node --test test/*.test.js",
     "verify": "npm run check && npm test",
     "build:desktop-host": "powershell -ExecutionPolicy Bypass -File scripts/build-desktop-host.ps1",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
     "start:app": "electron .",
     "server": "node server/sync-server.js"
   },
