@@ -26,7 +26,7 @@ npm run start
 npm run dev
 ```
 
-문법 검사와 저장·동기화·서버 경계·커밋 정책 테스트:
+문법 검사와 저장·활동 계산·동기화·서버 경계·커밋 정책 테스트:
 
 ```powershell
 npm run verify
@@ -40,6 +40,7 @@ Pull request와 `main`, `fix/**` push에서는 GitHub Actions가 PostgreSQL 16�
 
 ```powershell
 npm ci
+$env:DAYMARK_SYNC_URL="https://your-app.up.railway.app"
 npm run package:win
 ```
 
@@ -50,7 +51,9 @@ dist/Daymark-win32-x64/
 dist/Daymark-<version>-win32-x64.zip
 ```
 
-`v*` 태그 push 또는 수동 workflow 실행 시 Windows GitHub Actions가 같은 ZIP을 빌드합니다. 태그 빌드는 GitHub Release에도 자동 첨부됩니다. 현재 빌드는 portable 배포이며 설치 프로그램, code signing, 앱 내부 자동 업데이트는 포함하지 않습니다. 외부 공개 배포 전에는 인증서와 업데이트 정책을 별도로 결정해야 합니다.
+패키징 시 `DAYMARK_SYNC_URL`은 portable app의 `daymark-config.json`에 기록됩니다. GitHub Actions에서는 repository variable `DAYMARK_SYNC_URL`을 설정하면 같은 값이 artifact에 주입됩니다.
+
+`v*` 태그 push 또는 수동 workflow 실행 시 Windows GitHub Actions가 ZIP을 빌드합니다. 태그 빌드는 GitHub Release에도 자동 첨부됩니다. 현재 빌드는 portable 배포이며 설치 프로그램, code signing, 앱 내부 자동 업데이트는 포함하지 않습니다. 외부 공개 배포 전에는 인증서와 업데이트 정책을 별도로 결정해야 합니다.
 
 ## Agent 커밋 정책
 
@@ -122,40 +125,51 @@ npm run server
 
 서버 시작 시 `change_seq`와 deterministic tie-break column을 자동 생성·마이그레이션합니다. 기존 ISO timestamp cursor는 최초 새 동기화에서 `0`으로 해석되어 authoritative state를 다시 내려받고 record merge가 중복을 제거합니다.
 
-데스크톱 앱 endpoint는 실행 환경에서 고정합니다.
+개발 실행에서는 다음 환경 변수를 사용합니다.
 
 ```text
 DAYMARK_SYNC_URL=https://your-app.up.railway.app
 ```
 
-기존 설치에 저장된 `syncUrl`은 migration fallback으로 유지됩니다. Personal sync code는 최초 실행 시 생성되며 다른 PC에서 같은 code를 사용하면 동일 데이터를 공유합니다. 저장 변경은 약 0.8초 debounce 후 전송되고 다른 기기 변경은 1분마다 확인합니다.
+패키지에서는 환경 변수 값이 우선이고, 없으면 build에 포함된 `daymark-config.json`을 사용합니다. 기존 설치에 저장된 `syncUrl`은 migration fallback으로 유지됩니다.
+
+Personal sync code는 최초 실행 시 생성되며 다른 PC에서 같은 code를 사용하면 동일 데이터를 공유합니다. 저장 변경은 약 0.8초 debounce 후 전송되고 다른 기기 변경은 1분마다 확인합니다.
 
 ### 동기화 안전성
 
 - 업로드 대상은 server cursor와 기기 시각이 아니라 현재 record version과 `meta.syncAck`의 차이로 결정합니다.
-- 업로드는 최대 1,000개씩 나누며 server는 limit 초과 요청을 일부 처리하지 않고 거부합니다.
+- 업로드는 최대 1,000개이면서 serialized records 3.5 MB 이하로 나눕니다.
+- 서버 request body는 5 MB, 단일 record는 256 KB로 제한됩니다.
+- 일반 다운로드 cursor page는 최대 10개 record이며 `hasMore` 동안 반복합니다.
 - 다운로드는 account별 PostgreSQL advisory lock 아래 증가하는 `change_seq` cursor를 사용합니다.
-- 다운로드는 page 단위로 반복하며 중간 실패 시 마지막 성공 cursor와 merge 결과를 저장합니다.
-- 동일 timestamp에서는 client와 server가 같은 stable JSON tie-break를 사용하고 삭제가 우선합니다.
+- 중간 실패 시 마지막 성공 cursor와 merge 결과를 저장합니다.
+- 동일 timestamp에서는 client와 server가 같은 stable JSON tie-break를 사용하며 PostgreSQL `C` collation으로 locale 영향을 제거하고 삭제를 우선합니다.
 - 원격 HTTP는 거부하며 localhost 개발 환경만 HTTP를 허용합니다.
 - Sync code는 DB에 raw value 대신 `HMAC-SHA256(SYNC_PEPPER, syncKey)`로 저장됩니다.
 
 ## 활동 분석
 
-Analytics는 앱이 열린 시간을 그대로 더하지 않습니다. Electron `powerMonitor.getSystemIdleTime()`을 사용해 각 측정 구간에서 마지막 키보드·마우스 입력 이후의 idle 시간을 제외합니다. Desktop Mode로 계속 실행해도 실제 입력이 없는 시간은 활동 시간에 포함되지 않습니다.
+Analytics는 앱이 열린 시간을 그대로 더하지 않습니다. Electron `powerMonitor.getSystemIdleTime()`의 이전·현재 sample을 비교하고 60초 idle threshold를 적용합니다.
+
+- 입력이 계속 최근이면 측정 interval 전체를 active로 계산합니다.
+- threshold를 넘기는 interval은 남아 있던 grace period만 계산합니다.
+- 장시간 idle 뒤 새 입력이 발생하면 입력 이후 부분만 계산합니다.
+
+Desktop Mode로 계속 실행해도 실제 입력이 없는 시간은 활동 시간에 포함되지 않습니다.
 
 ## 구조
 
 ```text
 electron/
-  main.js                 single instance, safe close, tray, desktop helper IPC
+  main.js                 single instance, safe close, tray, runtime config
   preload.js              context-isolated renderer bridge
   data-model.js           record merge, tombstone, version acknowledgement
   store.js                atomic local storage and recovery
-  sync.js                 HTTPS client, chunk upload, paginated sync
+  sync.js                 HTTPS client, byte/count chunk upload, paginated sync
 
 web/
   app.js                  application orchestration and close flush
+  activityMath.mjs        system idle interval calculation
   tasks.js                task domain operations
   controllers/            persistence, sync, description, desktop controllers
   pages/                  calendar, date inspector, today, analytics, settings
@@ -164,9 +178,10 @@ server/
   sync-server.js          PostgreSQL sync API, sequence cursor, per-account lock
 
 scripts/
-  package-windows.ps1     portable Windows packaging
+  package-windows.ps1     portable Windows packaging and runtime config injection
 
 test/
+  activity-math.test.js
   data-model.test.js
   store.test.js
   sync.test.js
@@ -182,7 +197,7 @@ test/
 3. sync 충돌은 record timestamp로 처리하며 동일 timestamp는 stable JSON tie-break로 결정적으로 병합하고 삭제를 우선합니다.
 4. upload dirty 상태는 record version acknowledgement로, download 진행은 server change sequence로 관리합니다.
 5. 삭제는 tombstone으로 전파하고 서버 확인 후 30일이 지난 local tombstone만 정리합니다.
-6. 서버는 account별 transaction을 직렬화하고 cursor 이후 변경분을 page 단위로 반환합니다.
+6. 서버는 account별 transaction을 직렬화하고 cursor 이후 변경분을 작은 page 단위로 반환합니다.
 
 ## 관련 문서
 
