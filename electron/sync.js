@@ -10,6 +10,7 @@ const {
 const MIN_SYNC_KEY_LENGTH = 32;
 const REQUEST_TIMEOUT_MS = 15000;
 const MAX_UPLOAD_RECORDS = 1000;
+const MAX_UPLOAD_BYTES = 3_500_000;
 const MAX_SYNC_ROUNDS = 1000;
 
 function syncEndpoint(settings, configuredUrl = '') {
@@ -31,6 +32,20 @@ function syncEndpoint(settings, configuredUrl = '') {
   return { endpoint: url.toString(), error: '' };
 }
 
+function uploadChunk(records, offset, maxRecords, maxBytes) {
+  const chunk = [];
+  let bytes = 2;
+  for (let index = offset; index < records.length && chunk.length < maxRecords; index += 1) {
+    const record = records[index];
+    const recordBytes = Buffer.byteLength(JSON.stringify(record), 'utf8') + (chunk.length ? 1 : 0);
+    if (chunk.length && bytes + recordBytes > maxBytes) break;
+    chunk.push(record);
+    bytes += recordBytes;
+    if (bytes >= maxBytes) break;
+  }
+  return chunk;
+}
+
 function createSyncService(options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const saveStore = options.saveStore;
@@ -38,6 +53,7 @@ function createSyncService(options = {}) {
   const configuredUrl = String(options.syncUrl || process.env.DAYMARK_SYNC_URL || '').trim();
   const requestTimeoutMs = Number(options.requestTimeoutMs || REQUEST_TIMEOUT_MS);
   const maxUploadRecords = Number(options.maxUploadRecords || MAX_UPLOAD_RECORDS);
+  const maxUploadBytes = Number(options.maxUploadBytes || MAX_UPLOAD_BYTES);
 
   async function requestPage(endpoint, syncKey, cursor, records) {
     const controller = new AbortController();
@@ -100,7 +116,7 @@ function createSyncService(options = {}) {
     let hasMore = true;
 
     for (let round = 0; round < MAX_SYNC_ROUNDS; round += 1) {
-      const chunk = outgoing.slice(uploadOffset, uploadOffset + maxUploadRecords);
+      const chunk = uploadChunk(outgoing, uploadOffset, maxUploadRecords, maxUploadBytes);
       const previousCursor = cursor;
       const result = await requestPage(endpoint, syncKey, cursor, chunk);
       if (!result.success) {
@@ -155,9 +171,11 @@ function createSyncService(options = {}) {
 }
 
 module.exports = {
+  MAX_UPLOAD_BYTES,
   MAX_UPLOAD_RECORDS,
   MIN_SYNC_KEY_LENGTH,
   REQUEST_TIMEOUT_MS,
   createSyncService,
-  syncEndpoint
+  syncEndpoint,
+  uploadChunk
 };
