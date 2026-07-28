@@ -6,7 +6,8 @@ const {
   createRateLimiter,
   createSyncServer,
   normalizeCursor,
-  normalizeRecord
+  normalizeRecord,
+  recordTieBreaker
 } = require('../server/sync-server');
 
 test('legacy timestamp cursors migrate to the numeric cursor origin', () => {
@@ -23,6 +24,13 @@ test('payload IDs must match their record IDs', () => {
     updatedAt: '2026-07-20T10:00:00.000Z',
     payload: { id: 'other', updatedAt: '2026-07-20T10:00:00.000Z' }
   }), null);
+});
+
+test('equal timestamps use deterministic payload ordering and deletion wins', () => {
+  const smaller = { payload: { id: 'task-1', content: 'A' } };
+  const larger = { payload: { id: 'task-1', content: 'B' } };
+  assert.equal(recordTieBreaker(smaller) < recordTieBreaker(larger), true);
+  assert.equal(recordTieBreaker(larger) < recordTieBreaker({ deletedAt: '2026-07-20T10:00:00.000Z' }), true);
 });
 
 test('rate limiter removes expired buckets', () => {
