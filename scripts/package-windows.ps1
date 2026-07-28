@@ -46,6 +46,11 @@ try {
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText((Join-Path $appDir "package.json"), $runtimeManifest, $utf8NoBom)
 
+  $runtimeConfig = [ordered]@{
+    syncUrl = [string]$env:DAYMARK_SYNC_URL
+  } | ConvertTo-Json
+  [System.IO.File]::WriteAllText((Join-Path $appDir "daymark-config.json"), $runtimeConfig, $utf8NoBom)
+
   Compress-Archive -Path (Join-Path $output "*") -DestinationPath $zip -CompressionLevel Optimal
   Write-Host "Portable build: $output"
   Write-Host "Archive: $zip"
