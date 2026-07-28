@@ -17,6 +17,15 @@ const DEFAULT_SETTINGS = {
   llmModel: 'gpt-4.1-mini'
 };
 
+function runtimeSyncUrl() {
+  if (process.env.DAYMARK_SYNC_URL) return process.env.DAYMARK_SYNC_URL;
+  try {
+    return String(require('../daymark-config.json').syncUrl || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let mainWindow;
 let tray = null;
@@ -42,6 +51,7 @@ const storeManager = createStoreManager({
   defaultSettings: DEFAULT_SETTINGS
 });
 const syncService = createSyncService({
+  syncUrl: runtimeSyncUrl(),
   saveStore: (store) => storeManager.save(store)
 });
 
