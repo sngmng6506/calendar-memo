@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, clipboard, screen, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard, screen, Tray, Menu, nativeImage, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const watchFs = require('fs');
@@ -9,6 +9,7 @@ const { createStoreManager } = require('./store');
 const { createSyncService } = require('./sync');
 
 const APP_DIR = 'daymark-calendar';
+const CLOSE_FLUSH_TIMEOUT_MS = 5000;
 const DEFAULT_SETTINGS = {
   windowOpacity: 0.86,
   desktopMode: false,
@@ -16,6 +17,16 @@ const DEFAULT_SETTINGS = {
   llmModel: 'gpt-4.1-mini'
 };
 
+function runtimeSyncUrl() {
+  if (process.env.DAYMARK_SYNC_URL) return process.env.DAYMARK_SYNC_URL;
+  try {
+    return String(require('../daymark-config.json').syncUrl || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let mainWindow;
 let tray = null;
 let desktopState = null;
@@ -23,6 +34,9 @@ let inputBridge = null;
 let attachWatchdog = null;
 let reattaching = false;
 let quitting = false;
+let allowQuit = false;
+let flushRequested = false;
+let closeFlushTimer = null;
 let devWatcherStarted = false;
 let devReloadTimer = null;
 
@@ -37,6 +51,7 @@ const storeManager = createStoreManager({
   defaultSettings: DEFAULT_SETTINGS
 });
 const syncService = createSyncService({
+  syncUrl: runtimeSyncUrl(),
   saveStore: (store) => storeManager.save(store)
 });
 
@@ -276,6 +291,52 @@ function startDevWatcher() {
   watchPath(__dirname, 'app');
 }
 
+function finishQuit() {
+  if (allowQuit) return;
+  allowQuit = true;
+  flushRequested = false;
+  clearTimeout(closeFlushTimer);
+  closeFlushTimer = null;
+  app.quit();
+}
+
+function requestRendererFlush() {
+  quitting = true;
+  if (allowQuit) {
+    app.quit();
+    return;
+  }
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+    finishQuit();
+    return;
+  }
+  if (flushRequested) return;
+  flushRequested = true;
+  mainWindow.webContents.send('app:prepare-close');
+  closeFlushTimer = setTimeout(finishQuit, CLOSE_FLUSH_TIMEOUT_MS);
+}
+
+function focusExistingWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (desktopState) {
+    mainWindow.webContents.send('tray:open-settings');
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function validStoreSnapshot(store) {
+  return Boolean(store && typeof store === 'object'
+    && Array.isArray(store.tasks)
+    && Array.isArray(store.signals)
+    && Array.isArray(store.reports)
+    && Array.isArray(store.deleted)
+    && store.analytics && typeof store.analytics === 'object'
+    && store.settings && typeof store.settings === 'object');
+}
+
 function createWindow() {
   const primary = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
@@ -300,6 +361,12 @@ function createWindow() {
 
   mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized-change', true));
   mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized-change', false));
+  mainWindow.on('close', (event) => {
+    if (allowQuit) return;
+    event.preventDefault();
+    requestRendererFlush();
+  });
+  mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.loadFile(path.join(__dirname, '..', 'web', 'index.html'));
   startDevWatcher();
 }
@@ -314,7 +381,7 @@ function buildTrayMenu() {
     },
     { label: '설정 열기', click: () => mainWindow?.webContents.send('tray:open-settings') },
     { type: 'separator' },
-    { label: '종료', click: () => { quitting = true; app.quit(); } }
+    { label: '종료', click: requestRendererFlush }
   ]);
 }
 
@@ -338,8 +405,14 @@ function loginItemOptions(enabled) {
 
 function registerIpcHandlers() {
   ipcMain.handle('store:load', () => storeManager.load());
-  ipcMain.handle('store:save', (_event, store) => storeManager.save(store));
-  ipcMain.handle('sync:run', (_event, store) => syncService.sync(store));
+  ipcMain.handle('store:save', (_event, store) => {
+    if (!validStoreSnapshot(store)) throw new TypeError('Invalid store snapshot.');
+    return storeManager.save(store);
+  });
+  ipcMain.handle('sync:run', (_event, store) => {
+    if (!validStoreSnapshot(store)) throw new TypeError('Invalid store snapshot.');
+    return syncService.sync(store);
+  });
   ipcMain.handle('window:minimize', () => mainWindow?.minimize());
   ipcMain.handle('window:toggle-maximize', () => {
     if (!mainWindow || desktopState) return false;
@@ -348,7 +421,7 @@ function registerIpcHandlers() {
     return mainWindow.isMaximized();
   });
   ipcMain.handle('window:is-maximized', () => Boolean(mainWindow?.isMaximized()));
-  ipcMain.handle('window:close', () => mainWindow?.close());
+  ipcMain.handle('window:close', () => requestRendererFlush());
   ipcMain.handle('desktop:enable', async (_event, bounds) => {
     const result = await enableDesktopMode(bounds);
     refreshTrayMenu();
@@ -380,32 +453,53 @@ function registerIpcHandlers() {
     app.setLoginItemSettings(loginItemOptions(Boolean(enabled)));
     return Boolean(app.getLoginItemSettings(loginItemOptions(true)).openAtLogin);
   });
+  ipcMain.handle('system:get-idle-time', () => powerMonitor.getSystemIdleTime());
   ipcMain.handle('clipboard:write', (_event, text) => clipboard.writeText(String(text || '')));
+  ipcMain.on('app:flush-complete', (event) => {
+    if (event.sender !== mainWindow?.webContents) return;
+    finishQuit();
+  });
 }
 
-app.whenReady().then(() => {
-  registerIpcHandlers();
-  createWindow();
-  createTray();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-app.on('window-all-closed', () => {
-  if (!quitting && desktopState) {
-    desktopState = null;
-    stopAttachWatchdog();
-    stopInputBridge();
-    createWindow();
-    return;
-  }
-  if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('before-quit', () => {
-  quitting = true;
+function cleanupRuntime() {
   stopAttachWatchdog();
   stopInputBridge();
+  clearTimeout(closeFlushTimer);
+  closeFlushTimer = null;
   if (tray && !tray.isDestroyed()) tray.destroy();
-});
+}
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', focusExistingWindow);
+  app.whenReady().then(() => {
+    registerIpcHandlers();
+    createWindow();
+    createTray();
+    app.on('activate', () => {
+      if (!quitting && BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (!quitting && desktopState) {
+      desktopState = null;
+      stopAttachWatchdog();
+      stopInputBridge();
+      createWindow();
+      return;
+    }
+    if (process.platform !== 'darwin') requestRendererFlush();
+  });
+
+  app.on('before-quit', (event) => {
+    quitting = true;
+    if (!allowQuit) {
+      event.preventDefault();
+      requestRendererFlush();
+      return;
+    }
+    cleanupRuntime();
+  });
+}

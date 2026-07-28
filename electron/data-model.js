@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const COLLECTIONS = Object.freeze(['tasks', 'signals', 'reports', 'analytics.days']);
 const COLLECTION_SET = new Set(COLLECTIONS);
 const DEFAULT_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -36,6 +38,25 @@ function incomingWins(current, next, currentTimestamp, nextTimestamp) {
   return stableJson(next) >= stableJson(current);
 }
 
+function syncRecordKey(recordOrCollection, recordId = '') {
+  if (typeof recordOrCollection === 'object' && recordOrCollection) {
+    return `${recordOrCollection.collection}:${recordOrCollection.recordId}`;
+  }
+  return `${recordOrCollection}:${recordId}`;
+}
+
+function syncRecordVersion(record) {
+  if (!record || !record.collection || !record.recordId) return '';
+  const canonical = {
+    collection: record.collection,
+    recordId: record.recordId,
+    updatedAt: record.updatedAt || '',
+    deletedAt: record.deletedAt || '',
+    payload: record.deletedAt ? null : record.payload
+  };
+  return crypto.createHash('sha256').update(stableJson(canonical)).digest('hex');
+}
+
 function normalizeAnalytics(value) {
   if (!value || typeof value !== 'object') return { days: {} };
   return {
@@ -48,11 +69,19 @@ function normalizeDeleted(value) {
   const latest = new Map();
   for (const item of Array.isArray(value) ? value : []) {
     if (!item || !COLLECTION_SET.has(item.collection) || !item.recordId || !item.deletedAt) continue;
-    const key = `${item.collection}:${item.recordId}`;
+    const key = syncRecordKey(item);
     const current = latest.get(key);
     if (!current || compareTimestamp(item.deletedAt, current.deletedAt) >= 0) latest.set(key, clone(item));
   }
   return [...latest.values()];
+}
+
+function normalizeSyncAck(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key, version]) => key.includes(':') && typeof version === 'string' && version)
+  );
 }
 
 function normalizeStore(value, defaultSettings = {}) {
@@ -65,9 +94,11 @@ function normalizeStore(value, defaultSettings = {}) {
     deleted: normalizeDeleted(source.deleted),
     settings: { ...clone(defaultSettings), ...(source.settings && typeof source.settings === 'object' ? clone(source.settings) : {}) },
     meta: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: Number(source.meta?.revision || 0),
-      lastSavedAt: source.meta?.lastSavedAt || ''
+      lastSavedAt: source.meta?.lastSavedAt || '',
+      syncAck: normalizeSyncAck(source.meta?.syncAck),
+      syncAckRevision: Number(source.meta?.syncAckRevision || 0)
     }
   };
 }
@@ -192,21 +223,75 @@ function recordsFromStore(store) {
   return records;
 }
 
-function syncRecordsFromStore(store, since = '') {
-  const sinceMs = timestampMs(since);
-  const records = recordsFromStore(store).filter((record) => timestampMs(record.updatedAt) > sinceMs);
-  for (const item of store.deleted || []) {
-    if (!item.collection || !item.recordId || !item.deletedAt) continue;
-    if (timestampMs(item.deletedAt) <= sinceMs && item.syncedAt) continue;
-    records.push({
+function tombstoneRecordsFromStore(store) {
+  return (store.deleted || [])
+    .filter((item) => item.collection && item.recordId && item.deletedAt)
+    .map((item) => ({
       collection: item.collection,
       recordId: item.recordId,
       payload: null,
       updatedAt: item.deletedAt,
       deletedAt: item.deletedAt
-    });
+    }));
+}
+
+function allSyncRecords(store) {
+  return [...recordsFromStore(store), ...tombstoneRecordsFromStore(store)];
+}
+
+function currentSyncRecord(store, collection, recordId) {
+  const tombstone = findTombstone(store, collection, recordId);
+  if (tombstone) {
+    return {
+      collection,
+      recordId,
+      payload: null,
+      updatedAt: tombstone.deletedAt,
+      deletedAt: tombstone.deletedAt
+    };
   }
-  return records;
+  const payload = getRecord(store, collection, recordId);
+  if (!payload) return null;
+  return { collection, recordId, payload, updatedAt: recordTimestamp(payload) };
+}
+
+function syncRecordsFromStore(store) {
+  const ack = store.meta?.syncAck || {};
+  return allSyncRecords(store).filter((record) => ack[syncRecordKey(record)] !== syncRecordVersion(record));
+}
+
+function markRecordsSynced(store, records) {
+  store.meta ||= {};
+  store.meta.syncAck ||= {};
+  let changed = false;
+  for (const record of Array.isArray(records) ? records : []) {
+    if (!record?.collection || !record?.recordId) continue;
+    const current = currentSyncRecord(store, record.collection, record.recordId);
+    if (!current) continue;
+    const incomingVersion = syncRecordVersion(record);
+    const currentVersion = syncRecordVersion(current);
+    if (!incomingVersion || incomingVersion !== currentVersion) continue;
+    const key = syncRecordKey(record);
+    if (store.meta.syncAck[key] === currentVersion) continue;
+    store.meta.syncAck[key] = currentVersion;
+    changed = true;
+  }
+  if (changed) store.meta.syncAckRevision = Number(store.meta.syncAckRevision || 0) + 1;
+  return changed;
+}
+
+function pruneSyncAcks(store) {
+  store.meta ||= {};
+  store.meta.syncAck ||= {};
+  const active = new Set(allSyncRecords(store).map(syncRecordKey));
+  let changed = false;
+  for (const key of Object.keys(store.meta.syncAck)) {
+    if (active.has(key)) continue;
+    delete store.meta.syncAck[key];
+    changed = true;
+  }
+  if (changed) store.meta.syncAckRevision = Number(store.meta.syncAckRevision || 0) + 1;
+  return store;
 }
 
 function mergeSettings(current = {}, incoming = {}) {
@@ -241,7 +326,12 @@ function mergeStoreSnapshots(current, incoming, defaultSettings = {}) {
   }
   const merged = mergeSyncRecords(base, combinedRecords);
   merged.settings = mergeSettings(base.settings, source.settings);
-  merged.meta = { ...base.meta };
+  const syncMeta = source.meta.syncAckRevision >= base.meta.syncAckRevision ? source.meta : base.meta;
+  merged.meta = {
+    ...base.meta,
+    syncAck: clone(syncMeta.syncAck),
+    syncAckRevision: syncMeta.syncAckRevision
+  };
   return merged;
 }
 
@@ -261,6 +351,7 @@ function pruneDeleted(store, options = {}) {
     if (!item.syncedAt) return true;
     return timestampMs(item.deletedAt) >= cutoff;
   });
+  pruneSyncAcks(store);
   return store;
 }
 
@@ -268,18 +359,23 @@ module.exports = {
   COLLECTIONS,
   COLLECTION_SET,
   DEFAULT_TOMBSTONE_RETENTION_MS,
+  allSyncRecords,
   applyDeleted,
   applyPayload,
   compareTimestamp,
   findTombstone,
+  markRecordsSynced,
   markTombstonesSynced,
   mergeStoreSnapshots,
   mergeSyncRecords,
   normalizeAnalytics,
   normalizeStore,
   pruneDeleted,
+  pruneSyncAcks,
   recordTimestamp,
   recordsFromStore,
+  syncRecordKey,
+  syncRecordVersion,
   syncRecordsFromStore,
   timestampMs
 };

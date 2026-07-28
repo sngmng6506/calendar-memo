@@ -45,7 +45,8 @@ const state = {
   resumeDesktopAfterAdjust: false,
   toastTimer: null,
   analyticsTimer: null,
-  lastActiveTick: null
+  lastActiveTick: null,
+  closing: false
 };
 
 const els = {};
@@ -53,6 +54,7 @@ let persistence;
 let syncController;
 let desktopController;
 let descriptionEditor;
+let closeUnsubscribe;
 
 window.addEventListener('DOMContentLoaded', initialize);
 
@@ -87,6 +89,7 @@ async function initialize() {
   bindActions();
   startAnalyticsTracking();
   syncController.start();
+  closeUnsubscribe = window.daymark.onPrepareClose?.(prepareForClose);
   renderAll();
 
   if (state.store.settings.desktopMode) {
@@ -94,10 +97,10 @@ async function initialize() {
   }
 
   window.addEventListener('beforeunload', () => {
-    recordActiveTime();
+    closeUnsubscribe?.();
     syncController.stop();
     desktopController.dispose();
-    persistence.flush();
+    clearInterval(state.analyticsTimer);
   }, { once: true });
 }
 
@@ -130,6 +133,24 @@ function startAnalyticsTracking() {
 
 async function recordActiveTime() {
   await recordAnalyticsTime({ state, persist, renderAll });
+}
+
+async function prepareForClose() {
+  if (state.closing) return;
+  state.closing = true;
+  syncController.stop();
+  desktopController.dispose();
+  clearInterval(state.analyticsTimer);
+  document.activeElement?.blur?.();
+
+  try {
+    await recordActiveTime();
+    await persistence.flush();
+  } catch (error) {
+    console.error('Could not flush before closing', error);
+  } finally {
+    window.daymark.completeCloseFlush?.();
+  }
 }
 
 function persist(options = {}) {

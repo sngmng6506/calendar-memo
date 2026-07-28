@@ -15,7 +15,7 @@ export function renderTodayPage({ mount, tasksForDate, renderDescriptionInput, a
 
   const actions = { renderDescriptionInput, addTask, removeTask, commitExisting, persist, renderAll };
   const list = page.querySelector('[data-list="today"]');
-  renderTaskCollection(list, todayTasks, actions, { empty: '?? ??? ????.' });
+  renderTaskCollection(list, todayTasks, actions, { empty: '오늘 등록된 할 일이 없습니다.' });
   list.appendChild(renderTodayDraftRow(today, actions));
 }
 
@@ -44,7 +44,7 @@ export async function completeTodayOpenTasks({ tasksForDate, persist, renderAll,
   const today = isoDate(new Date());
   const tasks = tasksForDate(today);
   if (!tasks.length) {
-    showToast('??? ?? ??? ????');
+    showToast('오늘 등록된 할 일이 없습니다.');
     return;
   }
 
@@ -57,7 +57,7 @@ export async function completeTodayOpenTasks({ tasksForDate, persist, renderAll,
   }
   await persist();
   renderAll();
-  showToast(shouldComplete ? `?? ?? ${targets.length}?? ?? ??????` : `?? ?? ${targets.length}?? ?? ?????`);
+  showToast(shouldComplete ? `오늘 할 일 ${targets.length}개를 완료했습니다.` : `오늘 할 일 ${targets.length}개를 다시 열었습니다.`);
 }
 
 function renderTaskCollection(container, tasks, actions, options = {}) {
@@ -83,6 +83,7 @@ function renderTodayTaskRow(task, actions) {
   const check = document.createElement('button');
   check.className = 'check';
   check.type = 'button';
+  check.title = task.completed ? '완료 취소' : '완료';
   check.textContent = task.completed ? '[x]' : '[ ]';
   check.addEventListener('click', async () => {
     task.completed = !task.completed;
@@ -154,7 +155,7 @@ function handleDraftDescriptionTab(event, textarea) {
       textarea.value = value.slice(0, start) + token + value.slice(end);
       textarea.selectionStart = textarea.selectionEnd = start + token.length;
     }
-    
+
     return true;
   }
 
@@ -172,23 +173,24 @@ function handleDraftDescriptionTab(event, textarea) {
       textarea.selectionStart = Math.max(lineStart, start - 2);
       textarea.selectionEnd = Math.max(textarea.selectionStart, end - 2);
     }
-    
+
     return true;
   }
 
   if (bulletMatch) {
     textarea.value = value.slice(0, lineStart) + '  ' + value.slice(lineStart);
     textarea.selectionStart = textarea.selectionEnd = start + 2;
-    
+
     return true;
   }
 
   const token = line.trim().length ? '  ' : '  \u2022 ';
   textarea.value = value.slice(0, start) + token + value.slice(end);
   textarea.selectionStart = textarea.selectionEnd = start + token.length;
-  
+
   return true;
 }
+
 function renderTodayDraftRow(taskDate, actions) {
   const row = document.createElement('div');
   row.className = 'today-task draft';
@@ -201,11 +203,11 @@ function renderTodayDraftRow(taskDate, actions) {
   body.className = 'today-task-body';
   const input = document.createElement('input');
   input.className = 'task-input';
-  input.placeholder = 'today task';
+  input.placeholder = '오늘 할 일';
   input.spellcheck = false;
   const description = document.createElement('textarea');
   description.className = 'description-input today-description terminal-description';
-  description.placeholder = 'description';
+  description.placeholder = '상세 메모';
   description.spellcheck = false;
   description.addEventListener('keydown', (event) => handleDraftDescriptionTab(event, description));
 

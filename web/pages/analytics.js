@@ -1,8 +1,10 @@
 import { addDays, escapeHtml, formatDuration, isoDate, pad2 } from '../utils.js';
+import { activeSecondsForInterval, SYSTEM_IDLE_THRESHOLD_SECONDS } from '../activityMath.mjs';
 
 const CLOCK_BIN_COUNT = 96;
 const CLOCK_BIN_MINUTES = 15;
 const AVG_DAY_COUNT = 7;
+let previousSystemIdle = null;
 
 export function renderAnalyticsPage({ mount, analyticsDay, store }) {
   const today = isoDate(new Date());
@@ -16,7 +18,7 @@ export function renderAnalyticsPage({ mount, analyticsDay, store }) {
   page.className = 'analytics-page analytics-quadrants';
   page.innerHTML = `
     <section class="analytics-panel active-clock-panel">
-      <div class="analytics-panel-head"><span>When did you focus?</span><strong>${formatDuration(activeToday)}</strong></div>
+      <div class="analytics-panel-head"><span>When were you active?</span><strong>${formatDuration(activeToday)}</strong></div>
       <div class="active-clock" data-active-clock></div>
     </section>
     <section class="analytics-panel recent-completion-panel">
@@ -32,8 +34,6 @@ export function renderAnalyticsPage({ mount, analyticsDay, store }) {
 }
 
 export function renderActiveClock(container, bins, activeSeconds = 0, averageBins = []) {
-  // The 7-day average ring reaches r=220 (see renderAveragePath), so the box has
-  // to clear 220 from the centre or that path gets clipped.
   const size = 460;
   const center = size / 2;
   const max = Math.max(0, ...bins, ...averageBins);
@@ -89,7 +89,7 @@ export function renderActiveClock(container, bins, activeSeconds = 0, averageBin
   })() : '';
 
   container.innerHTML = `
-    <svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Active time by 15-minute interval">
+    <svg viewBox="0 0 ${size} ${size}" role="img" aria-label="System active time by 15-minute interval">
       <circle class="clock-ring" cx="${center}" cy="${center}" r="90"></circle>
       <circle class="clock-center" cx="${center}" cy="${center}" r="48"></circle>
       ${averagePath}
@@ -119,13 +119,25 @@ export async function recordActiveTime({ state, persist, renderAll }) {
   state.lastActiveTick = now;
   if (!delta) return;
 
+  let idleSeconds = SYSTEM_IDLE_THRESHOLD_SECONDS + delta;
+  try {
+    const measured = await window.daymark.getSystemIdleTime?.();
+    if (Number.isFinite(Number(measured))) idleSeconds = Number(measured);
+  } catch {
+    idleSeconds = document.visibilityState === 'visible' ? 0 : SYSTEM_IDLE_THRESHOLD_SECONDS + delta;
+  }
+
+  const activeDelta = activeSecondsForInterval(delta, previousSystemIdle, idleSeconds);
+  previousSystemIdle = idleSeconds;
+  if (!activeDelta) return;
+
   const current = new Date();
   const day = analyticsDay(state.store, isoDate(current));
   const hour = current.getHours();
   const bin = hour * 4 + Math.floor(current.getMinutes() / CLOCK_BIN_MINUTES);
-  day.activeSeconds = (day.activeSeconds || 0) + delta;
-  day.hours[hour] += delta;
-  day.bins15[bin] += delta;
+  day.activeSeconds = (day.activeSeconds || 0) + activeDelta;
+  day.hours[hour] += activeDelta;
+  day.bins15[bin] += activeDelta;
   day.lastSeenAt = current.toISOString();
   day.updatedAt = day.lastSeenAt;
   await persist();
@@ -179,7 +191,6 @@ function renderAveragePath(averageBins, max, center) {
   });
   return `<path class="clock-average" d="${smoothClosedPath(points)}"><title>7D average pattern</title></path>`;
 }
-
 
 function completionDaysForRecentDays(store, today, count) {
   const statsByDay = new Map();
