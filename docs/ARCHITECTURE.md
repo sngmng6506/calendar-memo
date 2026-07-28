@@ -12,6 +12,7 @@
 - remote sync request 수행
 - renderer store IPC 형태 검증
 - OS system idle time 제공
+- 환경 변수 또는 packaged runtime config에서 app-owned sync endpoint 로드
 
 ### Preload
 
@@ -48,7 +49,7 @@ DOM rendering과 사용자 interaction만 담당한다. Local filesystem, Postgr
 - HTTPS endpoint validation
 - request timeout
 - version 기반 pending upload
-- 1,000개 단위 upload chunk
+- 1,000개와 3.5 MB 이중 upload chunk 제한
 - paginated download loop
 - server response merge와 acknowledgement
 - partial failure cursor 저장
@@ -67,22 +68,26 @@ DOM rendering과 사용자 interaction만 담당한다. Local filesystem, Postgr
 - `desktopController.js`: Desktop Mode, auto-start, resize, tray callback
 - `descriptionEditor.js`: description textarea 높이와 bullet indentation
 
-### Pages
+### Pages and activity math
 
-각 page는 전달받은 state selector와 action을 사용해 DOM을 만들며 storage나 IPC를 직접 다루지 않는다. Analytics는 main process가 제공한 system idle time으로 실제 활동 구간만 기록한다.
+각 page는 전달받은 state selector와 action을 사용해 DOM을 만들며 storage나 IPC를 직접 다루지 않는다. `activityMath.mjs`는 이전·현재 system idle sample과 60초 threshold로 interval의 active portion을 계산한다. Analytics page와 Node test가 같은 함수를 사용한다.
 
 ## Sync server
 
-`sync_records`는 `(account_hash, collection, record_id)`를 primary key로 사용한다. Client record timestamp가 더 최신할 때 upsert하며, 동일 timestamp에서는 stable JSON tie-break가 큰 payload가 이기고 삭제가 최우선이다.
+`sync_records`는 `(account_hash, collection, record_id)`를 primary key로 사용한다. Client record timestamp가 더 최신할 때 upsert하며, 동일 timestamp에서는 stable JSON tie-break가 큰 payload가 이기고 삭제가 최우선이다. Text 비교는 PostgreSQL `C` collation을 사용해 locale 영향을 제거한다.
 
-각 insert/update는 `change_seq`를 받는다. 동일 account의 sync transaction은 PostgreSQL transaction advisory lock으로 직렬화되므로 cursor 순서와 commit 순서가 어긋나지 않는다. Server는 `change_seq > cursor`를 page 단위로 반환하고 submitted record의 authoritative state도 함께 반환한다.
+각 insert/update는 `change_seq`를 받는다. 동일 account의 sync transaction은 PostgreSQL transaction advisory lock으로 직렬화되므로 cursor 순서와 commit 순서가 어긋나지 않는다. Server는 `change_seq > cursor`를 작은 page 단위로 반환하고 submitted record의 authoritative state도 함께 반환한다.
 
-한 요청의 records는 `jsonb_to_recordset`으로 PostgreSQL에 전달한다. Record limit를 넘으면 일부를 자르지 않고 요청 전체를 거부한다.
+한 요청의 records는 `jsonb_to_recordset`으로 PostgreSQL에 전달한다. Record 또는 body limit를 넘으면 일부를 자르지 않고 요청 전체를 거부한다.
+
+## Packaging
+
+`package-windows.ps1`은 verify와 .NET helper build 후 Electron runtime, app files, helper를 portable ZIP으로 묶는다. `DAYMARK_SYNC_URL`은 `daymark-config.json`으로 주입되며 main process에서 환경 변수 다음 우선순위로 읽는다. Windows workflow는 repository variable을 packaging step에 전달하고 tag artifact를 GitHub Release에 첨부한다.
 
 ## Verification layers
 
-1. `node --check`: main, preload, server, renderer module 문법
-2. `node --test`: 저장·병합·sync client·sync server boundary·commit policy
+1. `node --check`: main, preload, server, renderer와 activity math 문법
+2. `node --test`: 저장·병합·activity math·sync client·sync server boundary·commit policy
 3. PostgreSQL CI: 두 client pagination과 concurrent sync serialization
 4. Windows smoke test: single instance, close flush, WorkerW attach/detach, tray 복귀, auto-start
 5. Windows package workflow: verify → desktop helper build → portable ZIP artifact
