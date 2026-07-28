@@ -12,6 +12,17 @@ const ALLOWED_COLLECTIONS = new Set(['tasks', 'signals', 'reports', 'analytics.d
 const DEFAULT_RATE_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT = 60;
 
+function stableJson(value) {
+  if (value == null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+}
+
+function recordTieBreaker(record) {
+  return record.deletedAt ? '\uffff' : stableJson(record.payload);
+}
+
 function hashKey(syncKey, pepper) {
   return crypto.createHmac('sha256', pepper).update(String(syncKey || '')).digest('hex');
 }
@@ -122,7 +133,8 @@ function normalizeRecord(record, maxRecordBytes = DEFAULT_MAX_RECORD_BYTES) {
     record_id: record.recordId,
     payload: record.deletedAt ? null : record.payload,
     record_updated_at: record.updatedAt,
-    deleted_at: record.deletedAt || null
+    deleted_at: record.deletedAt || null,
+    record_tiebreaker: recordTieBreaker(record)
   };
 }
 
@@ -149,13 +161,20 @@ async function ensureSchema(pool) {
       deleted_at timestamptz,
       server_updated_at timestamptz not null default now(),
       change_seq bigint not null default nextval('sync_change_seq'),
+      record_tiebreaker text not null default '',
       primary key (account_hash, collection, record_id)
     );
 
     alter table sync_records add column if not exists change_seq bigint;
+    alter table sync_records add column if not exists record_tiebreaker text;
     alter table sync_records alter column change_seq set default nextval('sync_change_seq');
     update sync_records set change_seq = nextval('sync_change_seq') where change_seq is null;
+    update sync_records
+      set record_tiebreaker = case when deleted_at is not null then chr(65535) else coalesce(payload::text, '') end
+      where record_tiebreaker is null or record_tiebreaker = '';
     alter table sync_records alter column change_seq set not null;
+    alter table sync_records alter column record_tiebreaker set default '';
+    alter table sync_records alter column record_tiebreaker set not null;
 
     create index if not exists sync_records_account_change_idx
       on sync_records (account_hash, change_seq asc);
@@ -172,7 +191,8 @@ async function upsertRecords(client, accountHash, records) {
         record_id text,
         payload jsonb,
         record_updated_at timestamptz,
-        deleted_at timestamptz
+        deleted_at timestamptz,
+        record_tiebreaker text
       )
     )
     insert into sync_records (
@@ -183,17 +203,21 @@ async function upsertRecords(client, accountHash, records) {
       record_updated_at,
       deleted_at,
       server_updated_at,
-      change_seq
+      change_seq,
+      record_tiebreaker
     )
-    select $1, collection, record_id, payload, record_updated_at, deleted_at, now(), nextval('sync_change_seq')
+    select $1, collection, record_id, payload, record_updated_at, deleted_at, now(), nextval('sync_change_seq'), record_tiebreaker
     from incoming
     on conflict (account_hash, collection, record_id) do update set
       payload = excluded.payload,
       record_updated_at = excluded.record_updated_at,
       deleted_at = excluded.deleted_at,
       server_updated_at = now(),
-      change_seq = nextval('sync_change_seq')
-    where sync_records.record_updated_at <= excluded.record_updated_at
+      change_seq = nextval('sync_change_seq'),
+      record_tiebreaker = excluded.record_tiebreaker
+    where sync_records.record_updated_at < excluded.record_updated_at
+       or (sync_records.record_updated_at = excluded.record_updated_at
+           and sync_records.record_tiebreaker < excluded.record_tiebreaker)
   `, [accountHash, JSON.stringify(records)]);
 }
 
@@ -401,6 +425,8 @@ module.exports = {
   mergeRows,
   normalizeCursor,
   normalizeRecord,
+  recordTieBreaker,
+  stableJson,
   startServer,
   upsertRecords
 };
