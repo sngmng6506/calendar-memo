@@ -63,6 +63,40 @@ test('sync chunks all pending uploads and acknowledges echoed authoritative reco
   assert.equal(Object.keys(result.store.meta.syncAck).length, 5);
 });
 
+test('sync also chunks uploads by serialized byte size', async () => {
+  const requestSizes = [];
+  const service = createSyncService({
+    syncUrl: 'https://example.com',
+    maxUploadRecords: 100,
+    maxUploadBytes: 500,
+    fetchImpl: async (_url, options) => {
+      const request = JSON.parse(options.body);
+      requestSizes.push(request.records.length);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          cursor: String(requestSizes.length),
+          syncedAt: '2026-07-20T11:00:00.000Z',
+          hasMore: false,
+          records: request.records
+        })
+      };
+    },
+    saveStore: async (value) => value
+  });
+  const tasks = Array.from({ length: 4 }, (_, index) => ({
+    id: `large-${index}`,
+    content: 'x'.repeat(220),
+    updatedAt: `2026-07-20T10:00:0${index}.000Z`
+  }));
+  const result = await service.sync(makeStore(tasks));
+  assert.equal(result.success, true);
+  assert.equal(requestSizes.length > 1, true);
+  assert.equal(requestSizes.reduce((sum, size) => sum + size, 0), 4);
+});
+
 test('sync continues downloading pages after uploads are exhausted', async () => {
   const requests = [];
   const pages = [
