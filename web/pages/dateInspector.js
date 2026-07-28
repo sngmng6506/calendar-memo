@@ -48,7 +48,7 @@ function renderInspectorTaskRow(task, actions) {
   const check = document.createElement('button');
   check.className = 'check';
   check.type = 'button';
-  check.title = task.completed ? '???? ??' : '??';
+  check.title = task.completed ? '완료 취소' : '완료';
   check.textContent = task.completed ? '[x]' : '[ ]';
   check.addEventListener('click', async () => {
     task.completed = !task.completed;
@@ -101,7 +101,7 @@ function renderInspectorDraftRow(taskDate, actions) {
 
   const input = document.createElement('input');
   input.className = 'task-input';
-  input.placeholder = '?? ??';
+  input.placeholder = '할 일 추가';
   input.dataset.inspectorDraft = 'true';
   input.spellcheck = false;
   input.addEventListener('keydown', async (event) => {
