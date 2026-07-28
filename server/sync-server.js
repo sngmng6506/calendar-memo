@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const DEFAULT_MAX_BODY_BYTES = 5_000_000;
 const DEFAULT_MAX_RECORDS = 5000;
 const DEFAULT_MAX_RECORD_BYTES = 256_000;
-const DEFAULT_MAX_DOWNLOAD_RECORDS = 5000;
+const DEFAULT_MAX_DOWNLOAD_RECORDS = 10;
 const MIN_SYNC_KEY_LENGTH = 32;
 const ALLOWED_COLLECTIONS = new Set(['tasks', 'signals', 'reports', 'analytics.days']);
 const DEFAULT_RATE_WINDOW_MS = 60_000;
@@ -170,8 +170,8 @@ async function ensureSchema(pool) {
     alter table sync_records alter column change_seq set default nextval('sync_change_seq');
     update sync_records set change_seq = nextval('sync_change_seq') where change_seq is null;
     update sync_records
-      set record_tiebreaker = case when deleted_at is not null then chr(65535) else coalesce(payload::text, '') end
-      where record_tiebreaker is null or record_tiebreaker = '';
+      set record_tiebreaker = case when deleted_at is not null then chr(65535) else '' end
+      where record_tiebreaker is null;
     alter table sync_records alter column change_seq set not null;
     alter table sync_records alter column record_tiebreaker set default '';
     alter table sync_records alter column record_tiebreaker set not null;
@@ -217,7 +217,7 @@ async function upsertRecords(client, accountHash, records) {
       record_tiebreaker = excluded.record_tiebreaker
     where sync_records.record_updated_at < excluded.record_updated_at
        or (sync_records.record_updated_at = excluded.record_updated_at
-           and sync_records.record_tiebreaker < excluded.record_tiebreaker)
+           and sync_records.record_tiebreaker collate "C" < excluded.record_tiebreaker collate "C")
   `, [accountHash, JSON.stringify(records)]);
 }
 
