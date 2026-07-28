@@ -49,7 +49,7 @@ Task content, completion, date 이동, sort order 변경은 모두 `updatedAt`�
 
 ### 수정 대 수정
 
-더 최신 timestamp의 payload가 이긴다. Timestamp가 정확히 같으면 client와 server가 동일한 stable JSON 문자열을 비교해 모든 기기가 같은 결과를 선택하며, 삭제 marker가 가장 크므로 삭제가 우선한다.
+더 최신 timestamp의 payload가 이긴다. Timestamp가 정확히 같으면 client와 server가 동일한 stable JSON 문자열을 C collation 순서로 비교해 모든 기기가 같은 결과를 선택한다. 삭제 marker는 가장 큰 값이므로 exact tie에서는 삭제가 우선한다.
 
 ### 수정 대 삭제
 
@@ -92,11 +92,20 @@ Server는 `sync_change_seq` sequence와 `sync_records.change_seq`를 사용한�
 download = change_seq > cursor
 ```
 
-한 응답은 최대 5,000개의 cursor record를 반환하고 `hasMore`가 있으면 client가 다음 page를 요청한다. 기존 ISO timestamp cursor는 migration 시 `0`으로 해석되어 한 번 전체 authoritative state를 다시 받는다.
+일반 cursor page는 최대 10개 record를 반환한다. `hasMore`가 있으면 client가 cursor를 전진시키며 다음 page를 요청한다. 작은 page는 개별 payload가 큰 경우에도 응답 메모리와 JSON 크기를 제한하기 위한 선택이다. Submitted record의 authoritative state는 cursor page와 별도로 같은 응답에 포함될 수 있다.
+
+기존 ISO timestamp cursor는 migration 시 `0`으로 해석되어 한 번 전체 authoritative state를 다시 받는다.
 
 ## 대량 전송
 
-Client는 pending upload를 최대 1,000개 단위로 나눈다. Server는 request record가 limit를 넘으면 `413`을 반환하며 일부만 조용히 처리하지 않는다. 중간 round가 실패하면 마지막 성공 cursor와 merge 결과를 local store에 저장해 다음 실행에서 이어간다.
+Client는 pending upload를 다음 두 제한 안에서 나눈다.
+
+```text
+records <= 1,000
+serialized records <= 3.5 MB
+```
+
+Server request body limit은 5 MB이며 record 하나는 최대 256 KB다. Server는 request record가 limit를 넘으면 `413`을 반환하며 일부만 조용히 처리하지 않는다. 중간 round가 실패하면 마지막 성공 cursor와 merge 결과를 local store에 저장해 다음 실행에서 이어간다.
 
 ## 보안 경계
 
