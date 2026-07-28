@@ -1,8 +1,10 @@
 import { addDays, escapeHtml, formatDuration, isoDate, pad2 } from '../utils.js';
+import { activeSecondsForInterval, SYSTEM_IDLE_THRESHOLD_SECONDS } from '../activityMath.mjs';
 
 const CLOCK_BIN_COUNT = 96;
 const CLOCK_BIN_MINUTES = 15;
 const AVG_DAY_COUNT = 7;
+let previousSystemIdle = null;
 
 export function renderAnalyticsPage({ mount, analyticsDay, store }) {
   const today = isoDate(new Date());
@@ -110,12 +112,6 @@ export function analyticsDay(store, dayId) {
   return day;
 }
 
-export function activeSecondsForInterval(delta, idleSeconds) {
-  const interval = Math.max(0, Number(delta || 0));
-  const idle = Math.max(0, Number(idleSeconds || 0));
-  return Math.max(0, interval - Math.min(interval, idle));
-}
-
 export async function recordActiveTime({ state, persist, renderAll }) {
   const now = Date.now();
   const previous = state.lastActiveTick || now;
@@ -123,15 +119,16 @@ export async function recordActiveTime({ state, persist, renderAll }) {
   state.lastActiveTick = now;
   if (!delta) return;
 
-  let idleSeconds = delta;
+  let idleSeconds = SYSTEM_IDLE_THRESHOLD_SECONDS + delta;
   try {
     const measured = await window.daymark.getSystemIdleTime?.();
     if (Number.isFinite(Number(measured))) idleSeconds = Number(measured);
   } catch {
-    idleSeconds = document.visibilityState === 'visible' ? 0 : delta;
+    idleSeconds = document.visibilityState === 'visible' ? 0 : SYSTEM_IDLE_THRESHOLD_SECONDS + delta;
   }
 
-  const activeDelta = activeSecondsForInterval(delta, idleSeconds);
+  const activeDelta = activeSecondsForInterval(delta, previousSystemIdle, idleSeconds);
+  previousSystemIdle = idleSeconds;
   if (!activeDelta) return;
 
   const current = new Date();
